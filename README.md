@@ -23,6 +23,14 @@ Traffic data application with a Fastify backend, PostgreSQL persistence, PostgRE
 7. Start the backend from `backend/` with `npm run dev`.
 
 The frontend reads PostgREST directly through a runtime config script served by Fastify. Local Vite development can still override that with `VITE_POSTGREST_BASE_URL`, which defaults to `http://localhost:3001`.
+For the admin login flow during local Vite development, set `VITE_ADMIN_API_BASE_URL` to the Fastify origin, which defaults to `http://localhost:3000`.
+
+### Admin UI
+
+- Open `#/admin/login` from the navbar or directly in the browser.
+- Sign in with `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
+- After login, the admin screen creates `traffic_metrics` rows through PostgREST using a short-lived JWT minted by Fastify.
+- Slice 1 only covers metric creation. Editing and deleting existing entries are still deferred.
 
 ## Packaged runtime
 
@@ -32,6 +40,7 @@ The frontend reads PostgREST directly through a runtime config script served by 
 - connects to PostgreSQL through `DATABASE_URL`
 - expects a browser-reachable PostgREST base URL through `POSTGREST_BASE_URL` for backend runtime metadata
 - serves runtime browser config from `/app-config.js`, sourced from `POSTGREST_BASE_URL`
+- verifies admin credentials from `ADMIN_USERNAME` and `ADMIN_PASSWORD`
 
 For local Docker Compose usage, the backend serves the frontend on `http://localhost:3000` and PostgREST remains public on `http://localhost:3001`.
 
@@ -39,7 +48,7 @@ For local Docker Compose usage, the backend serves the frontend on `http://local
 
 - Frontend build: `npm --prefix frontend run build`
 - Frontend tests: `npm --prefix frontend run test`
-- Backend feature tests: `DATABASE_URL=postgres://postgres:postgres@localhost:55432/traffic_data POSTGREST_BASE_URL=http://localhost:3001 npm --prefix backend run test:feature`
+- Backend feature tests: `DATABASE_URL=postgres://postgres:postgres@localhost:55432/traffic_data ADMIN_USERNAME=admin ADMIN_PASSWORD=local-admin-password POSTGREST_BASE_URL=http://localhost:3001 npm --prefix backend run test:feature`
 - Packaged runtime: `docker compose up -d --build api postgrest postgres`
 - Deploy scaffold validity: `docker compose -f deploy/docker-compose.yml config` and `ansible-playbook -i deploy/inventory.yml deploy/prod.yml --syntax-check`
 - Perf helper tests: `node --test perf/*.test.mjs`

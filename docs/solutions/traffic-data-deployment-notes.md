@@ -19,13 +19,15 @@ The external deployment repository can keep its existing Ansible ownership as lo
 ## Environment contract
 
 - `DATABASE_URL`: PostgreSQL connection string for Fastify migrations and startup
+- `ADMIN_USERNAME`: admin login username used by the Fastify auth route
+- `ADMIN_PASSWORD`: admin login password used by the Fastify auth route
 - `FRONTEND_DIST_DIR`: path to the built frontend assets inside the runtime container
 - `POSTGREST_BASE_URL`: PostgREST base URL that the backend exposes through `/system/runtime` and `/app-config.js`
 - `POSTGREST_JWT_SECRET`: shared JWT secret for admin-only PostgREST writes
 - `POSTGREST_ANON_ROLE`: PostgREST anonymous read role
 - `POSTGREST_ADMIN_ROLE`: PostgREST admin write role
 
-`VITE_POSTGREST_BASE_URL` remains optional for local Vite development. The packaged runtime does not require a build-time frontend URL because Fastify serves browser config at request time.
+`VITE_POSTGREST_BASE_URL` and `VITE_ADMIN_API_BASE_URL` remain local-Vite overrides only. The packaged runtime does not require build-time frontend URLs because Fastify serves the browser runtime config and the admin login posts back to the same origin.
 
 ## DigitalOcean performance path
 
