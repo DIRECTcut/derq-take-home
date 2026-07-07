@@ -1,12 +1,19 @@
 <template>
   <main class="dashboard-shell">
+    <nav class="top-nav" aria-label="Primary">
+      <p class="top-nav__brand">Traffic Dash</p>
+      <div class="top-nav__links">
+        <a :href="isAuthenticated ? '#/admin/data' : '#/admin/login'">Admin</a>
+      </div>
+    </nav>
+
     <section class="hero-panel">
       <div>
         <p class="eyebrow">Traffic data app</p>
-        <h1>Country traffic and vehicle coverage at a glance</h1>
+        <h1>Traffic data at a glance</h1>
       </div>
       <p class="hero-panel__body">
-        The frontend stays intentionally thin. It reads PostgREST-backed views and shows the latest seeded dataset without reshaping the backend contract in the browser.
+        Latest country traffic and vehicle coverage from the seeded dataset.
       </p>
     </section>
 
@@ -18,7 +25,7 @@
     </div>
 
     <div v-else-if="countryTraffic.length === 0 && vehicleDistribution.length === 0" class="status-panel">
-      The dashboard has no seeded data to show yet.
+      No data.
     </div>
 
     <section v-else class="dashboard-grid">
@@ -31,7 +38,9 @@
 <script setup lang="ts">
 import CountryTrafficChart from './CountryTrafficChart.vue';
 import VehicleTypeDistributionChart from './VehicleTypeDistributionChart.vue';
+import { useAdminSession } from '../composables/useAdminSession';
 import { useTrafficDashboard } from '../composables/useTrafficDashboard';
 
 const { countryTraffic, vehicleDistribution, loading, error, reload } = useTrafficDashboard();
+const { isAuthenticated } = useAdminSession();
 </script>

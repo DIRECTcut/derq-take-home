@@ -4,6 +4,7 @@ import DashboardShell from './DashboardShell.vue';
 describe('DashboardShell', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    window.sessionStorage.clear();
   });
 
   it('renders both dashboard views from transport-backed responses', async () => {
@@ -44,8 +45,12 @@ describe('DashboardShell', () => {
     const wrapper = mount(DashboardShell);
     await vi.waitFor(() => expect(wrapper.text()).toContain('Latest traffic values by country'));
 
+    expect(wrapper.text()).toContain('Traffic Dash');
+    expect(wrapper.text()).toContain('Admin');
+    expect(wrapper.text()).toContain('Traffic data at a glance');
     expect(wrapper.text()).toContain('Current vehicle-type coverage');
     expect(wrapper.text()).toContain('Albania');
+    expect(wrapper.get('a').attributes('href')).toBe('#/admin/login');
   });
 
   it('renders an actionable error state when transport requests fail', async () => {
@@ -66,6 +71,6 @@ describe('DashboardShell', () => {
     );
 
     const wrapper = mount(DashboardShell);
-    await vi.waitFor(() => expect(wrapper.text()).toContain('The dashboard has no seeded data to show yet.'));
+    await vi.waitFor(() => expect(wrapper.text()).toContain('No data.'));
   });
 });
