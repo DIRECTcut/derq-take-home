@@ -86,7 +86,7 @@ async function seedMetrics(
 }
 
 export function defaultTrafficCsvPath(): string {
-  return path.join(repoRoot(), 'docs', 'data', 'road_eqs_carhab$defaultview_linear_2_0.csv');
+  return path.join(repoRoot(), 'db', 'seed-data', 'road_eqs_carhab.csv');
 }
 
 export async function seedTrafficData(pool: Pool, csvPath: string = defaultTrafficCsvPath()): Promise<void> {
