@@ -8,9 +8,10 @@
         mode: "0755"
 
     - name: Copy deploy runtime files
-      synchronize:
+      copy:
         src: "{{ item.src }}"
         dest: "{{ project }}/{{ item.dest }}"
+        mode: "0644"
       loop:
         - src: docker-compose.yml
           dest: docker-compose.yml
@@ -24,4 +25,3 @@
         mode: "0755"
       loop:
         - artifacts
-

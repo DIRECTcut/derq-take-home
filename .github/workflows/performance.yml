@@ -456,6 +456,7 @@ jobs:
       - name: Download benchmark artifacts
         uses: actions/download-artifact@v5
         with:
+          pattern: s-*
           path: perf-artifacts
 
       - name: Aggregate performance results
