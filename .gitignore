@@ -3,4 +3,7 @@ backend/dist
 frontend/node_modules
 frontend/dist
 .env
+deploy/.env
+deploy/prod/.env
+artifacts/
 docs/

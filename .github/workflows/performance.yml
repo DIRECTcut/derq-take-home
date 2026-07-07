@@ -1,0 +1,511 @@
+name: Performance
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+
+env:
+  DO_REGION: nyc1
+  DO_IMAGE: ubuntu-24-04-x64
+  EXPECTED_SIZES: s-1vcpu-1gb,s-1vcpu-2gb,s-2vcpu-4gb
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      run_enabled: ${{ steps.preflight.outputs.run_enabled }}
+      skip_reason: ${{ steps.preflight.outputs.skip_reason }}
+      image_ref: ${{ steps.preflight.outputs.image_ref }}
+      image_tag: ${{ steps.preflight.outputs.image_tag }}
+    steps:
+      - name: Preflight performance workflow
+        id: preflight
+        env:
+          DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+
+          repo_lower="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            head_repo="$(jq -r '.pull_request.head.repo.full_name' "$GITHUB_EVENT_PATH")"
+            head_sha="$(jq -r '.pull_request.head.sha' "$GITHUB_EVENT_PATH")"
+          else
+            head_repo="${GITHUB_REPOSITORY}"
+            head_sha="${GITHUB_SHA}"
+          fi
+
+          run_enabled=true
+          skip_reason=""
+
+          if [ "$head_repo" != "${GITHUB_REPOSITORY}" ]; then
+            run_enabled=false
+            skip_reason="Fork pull requests do not receive the required deploy secrets, so performance deployment is skipped."
+          elif [ -z "${DIGITAL_OCEAN_TOKEN}" ]; then
+            run_enabled=false
+            skip_reason="DIGITAL_OCEAN_TOKEN is not configured."
+          elif [ -z "${GH_PAT}" ]; then
+            run_enabled=false
+            skip_reason="GH_PAT is not configured."
+          fi
+
+          image_tag="pr-${head_sha}"
+          image_ref="ghcr.io/${repo_lower}:${image_tag}"
+
+          {
+            echo "run_enabled=${run_enabled}"
+            echo "skip_reason=${skip_reason}"
+            echo "image_tag=${image_tag}"
+            echo "image_ref=${image_ref}"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Performance preflight"
+            echo
+            echo "- Candidate image: \`${image_ref}\`"
+            echo "- Trusted PR: \`${head_repo}\`"
+            echo "- Run enabled: \`${run_enabled}\`"
+            if [ -n "$skip_reason" ]; then
+              echo "- Skip reason: ${skip_reason}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build_candidate:
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.run_enabled == 'true'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push PR-scoped image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: ${{ needs.preflight.outputs.image_ref }}
+
+  benchmark:
+    runs-on: ubuntu-latest
+    needs:
+      - preflight
+      - build_candidate
+    if: needs.preflight.outputs.run_enabled == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - size: s-1vcpu-1gb
+          - size: s-1vcpu-2gb
+          - size: s-2vcpu-4gb
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: python3 -m pip install ansible-core
+
+      - name: Prepare artifact directory
+        run: mkdir -p "artifacts/${{ matrix.size }}"
+
+      - name: Generate ephemeral SSH key pair
+        id: ssh_key
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/${{ matrix.size }}-id_ed25519"
+          ssh-keygen -q -t ed25519 -N '' -f "$key_path"
+          echo "private_key_path=${key_path}" >> "$GITHUB_OUTPUT"
+          echo "public_key=$(cat "$key_path.pub")" >> "$GITHUB_OUTPUT"
+
+      - name: Register SSH key with DigitalOcean
+        id: register_key
+        env:
+          DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          key_name="traffic-data-${GITHUB_RUN_ID}-${{ matrix.size }}"
+          response="$(
+            curl -fsSL \
+              -X POST \
+              -H "Authorization: Bearer ${DIGITAL_OCEAN_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "https://api.digitalocean.com/v2/account/keys" \
+              -d "$(jq -n --arg name "$key_name" --arg public_key "${{ steps.ssh_key.outputs.public_key }}" '{name: $name, public_key: $public_key}')"
+          )"
+
+          key_id="$(printf '%s' "$response" | jq -r '.ssh_key.id')"
+          echo "key_id=${key_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Create droplet
+        id: droplet
+        env:
+          DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          droplet_name="traffic-data-${GITHUB_RUN_ID}-${{ matrix.size }}"
+          payload="$(jq -n \
+            --arg name "$droplet_name" \
+            --arg region "${DO_REGION}" \
+            --arg size "${{ matrix.size }}" \
+            --arg image "${DO_IMAGE}" \
+            --argjson ssh_keys "[${{ steps.register_key.outputs.key_id }}]" \
+            --argjson tags '["traffic-data-perf"]' \
+            '{name: $name, region: $region, size: $size, image: $image, ssh_keys: $ssh_keys, tags: $tags}')"
+
+          response="$(
+            curl -fsSL \
+              -X POST \
+              -H "Authorization: Bearer ${DIGITAL_OCEAN_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "https://api.digitalocean.com/v2/droplets" \
+              -d "$payload"
+          )"
+
+          droplet_id="$(printf '%s' "$response" | jq -r '.droplet.id')"
+          echo "droplet_id=${droplet_id}" >> "$GITHUB_OUTPUT"
+
+          for _ in $(seq 1 60); do
+            status_response="$(
+              curl -fsSL \
+                -H "Authorization: Bearer ${DIGITAL_OCEAN_TOKEN}" \
+                "https://api.digitalocean.com/v2/droplets/${droplet_id}"
+            )"
+
+            droplet_status="$(printf '%s' "$status_response" | jq -r '.droplet.status')"
+            droplet_ip="$(printf '%s' "$status_response" | jq -r '.droplet.networks.v4[] | select(.type == "public") | .ip_address' | head -n 1)"
+
+            if [ "$droplet_status" = "active" ] && [ -n "$droplet_ip" ]; then
+              echo "droplet_ip=${droplet_ip}" >> "$GITHUB_OUTPUT"
+              echo "ssh_target=root@${droplet_ip}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Timed out waiting for droplet ${droplet_id}." >&2
+          exit 1
+
+      - name: Wait for SSH readiness
+        env:
+          SSH_KEY_PATH: ${{ steps.ssh_key.outputs.private_key_path }}
+          SSH_TARGET: ${{ steps.droplet.outputs.ssh_target }}
+        run: |
+          set -euo pipefail
+
+          chmod 600 "$SSH_KEY_PATH"
+
+          for _ in $(seq 1 60); do
+            if ssh -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" "$SSH_TARGET" 'echo ready' >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Timed out waiting for SSH readiness." >&2
+          exit 1
+
+      - name: Write deploy environment files
+        env:
+          SSH_KEY_PATH: ${{ steps.ssh_key.outputs.private_key_path }}
+          DROPLET_IP: ${{ steps.droplet.outputs.droplet_ip }}
+          IMAGE_REF: ${{ needs.preflight.outputs.image_ref }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+
+          cat > deploy/.env <<EOF
+          SERVER_PROD=${DROPLET_IP}
+          SERVER_PROD_USER=root
+          SERVER_PROD_PROJECT_DIR=/root/traffic-data-web-app
+          SERVER_PROD_ROOT_LOGIN_MODE=prohibit-password
+          SSH_PRIVATE_KEY=${SSH_KEY_PATH}
+          REGISTRY_HOST=ghcr.io
+          REGISTRY_USERNAME=${GITHUB_REPOSITORY_OWNER}
+          REGISTRY_PASSWORD=${GH_PAT}
+          DEPLOY_IMAGE=${IMAGE_REF}
+          DEPLOY_POSTGRES_DB=traffic_data
+          DEPLOY_POSTGRES_USER=postgres
+          DEPLOY_POSTGRES_PASSWORD=postgres
+          DEPLOY_POSTGREST_DB_URI=postgres://authenticator:localdev_authenticator_password@postgres:5432/traffic_data
+          DEPLOY_POSTGREST_JWT_SECRET=super-secret-admin-key-for-local-dev-32
+          DEPLOY_POSTGREST_ANON_ROLE=web_anon
+          DEPLOY_POSTGREST_ADMIN_ROLE=traffic_admin
+          DEPLOY_APP_PORT=3000
+          DEPLOY_POSTGREST_PORT=3001
+          EOF
+
+          cat > deploy/prod/.env <<EOF
+          DEPLOY_IMAGE=${IMAGE_REF}
+          DEPLOY_POSTGRES_DB=traffic_data
+          DEPLOY_POSTGRES_USER=postgres
+          DEPLOY_POSTGRES_PASSWORD=postgres
+          DEPLOY_POSTGREST_DB_URI=postgres://authenticator:localdev_authenticator_password@postgres:5432/traffic_data
+          DEPLOY_POSTGREST_JWT_SECRET=super-secret-admin-key-for-local-dev-32
+          DEPLOY_POSTGREST_ANON_ROLE=web_anon
+          DEPLOY_POSTGREST_ADMIN_ROLE=traffic_admin
+          DEPLOY_APP_PORT=3000
+          DEPLOY_POSTGREST_PORT=3001
+          DEPLOY_PUBLIC_POSTGREST_URL=http://${DROPLET_IP}:3001
+          EOF
+
+      - name: Deploy review stack
+        run: |
+          set -euo pipefail
+          make -C deploy prod-init
+          make -C deploy prod
+          make -C deploy prod-login
+          make -C deploy prod-up
+
+      - name: Wait for application readiness
+        env:
+          APP_URL: http://${{ steps.droplet.outputs.droplet_ip }}:3000
+          POSTGREST_URL: http://${{ steps.droplet.outputs.droplet_ip }}:3001
+        run: |
+          set -euo pipefail
+
+          for _ in $(seq 1 60); do
+            if curl -fsS "${APP_URL}/health/ready" >/dev/null && curl -fsS "${POSTGREST_URL}/country_traffic_latest?select=country_code&limit=1" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Timed out waiting for deployed services." >&2
+          exit 1
+
+      - name: Run benchmark phases
+        id: benchmark
+        env:
+          SSH_KEY_PATH: ${{ steps.ssh_key.outputs.private_key_path }}
+          SSH_TARGET: ${{ steps.droplet.outputs.ssh_target }}
+          APP_URL: http://${{ steps.droplet.outputs.droplet_ip }}:3000
+          POSTGREST_URL: http://${{ steps.droplet.outputs.droplet_ip }}:3001
+          DROPLET_ID: ${{ steps.droplet.outputs.droplet_id }}
+          DROPLET_IP: ${{ steps.droplet.outputs.droplet_ip }}
+        run: |
+          set -euo pipefail
+
+          artifact_root="$PWD/artifacts/${{ matrix.size }}"
+          mkdir -p "$artifact_root"
+          benchmark_failed=false
+
+          run_phase() {
+            local phase_name="$1"
+            local target_rps="$2"
+            local duration="$3"
+            local max_p95="$4"
+            local phase_dir="$artifact_root/${phase_name}"
+            local summary_path="$phase_dir/summary.json"
+
+            mkdir -p "$phase_dir/metrics"
+
+            set +e
+            docker run --rm \
+              -v "$PWD:/work" \
+              -w /work \
+              grafana/k6 run \
+              --summary-export "$summary_path" \
+              -e TARGET_BASE_URL="$POSTGREST_URL" \
+              -e PHASE_NAME="$phase_name" \
+              -e TARGET_RPS="$target_rps" \
+              -e DURATION="$duration" \
+              -e MAX_P95_MS="$max_p95" \
+              -e MAX_FAILURE_RATE="0.01" \
+              /work/perf/k6-dashboard.js
+            phase_status="$?"
+            set -e
+
+            REMOTE_PROJECT_DIR=/root/traffic-data-web-app \
+            SSH_PRIVATE_KEY_PATH="$SSH_KEY_PATH" \
+            bash perf/collect-runtime-metrics.sh "$SSH_TARGET" "$phase_dir/metrics" "$APP_URL" "$POSTGREST_URL"
+
+            if [ "$phase_status" -ne 0 ]; then
+              benchmark_failed=true
+            fi
+          }
+
+          run_phase "rps-5" 5 "20s" 800
+          run_phase "rps-50" 50 "30s" 1200
+          run_phase "rps-500" 500 "45s" 2500
+
+          cat > "$artifact_root/manifest.json" <<EOF
+          {
+            "size": "${{ matrix.size }}",
+            "dropletId": "${DROPLET_ID}",
+            "dropletIp": "${DROPLET_IP}",
+            "appUrl": "${APP_URL}",
+            "postgrestUrl": "${POSTGREST_URL}",
+            "phases": [
+              {
+                "name": "rps-5",
+                "targetRps": 5,
+                "duration": "20s",
+                "summaryPath": "${artifact_root}/rps-5/summary.json",
+                "metricsDir": "${artifact_root}/rps-5/metrics",
+                "maxP95Ms": 800,
+                "maxFailureRate": 0.01
+              },
+              {
+                "name": "rps-50",
+                "targetRps": 50,
+                "duration": "30s",
+                "summaryPath": "${artifact_root}/rps-50/summary.json",
+                "metricsDir": "${artifact_root}/rps-50/metrics",
+                "maxP95Ms": 1200,
+                "maxFailureRate": 0.01
+              },
+              {
+                "name": "rps-500",
+                "targetRps": 500,
+                "duration": "45s",
+                "summaryPath": "${artifact_root}/rps-500/summary.json",
+                "metricsDir": "${artifact_root}/rps-500/metrics",
+                "maxP95Ms": 2500,
+                "maxFailureRate": 0.01
+              }
+            ]
+          }
+          EOF
+
+          node perf/summarize-results.mjs --manifest "$artifact_root/manifest.json" --output "$artifact_root/result.json"
+          echo "benchmark_failed=${benchmark_failed}" >> "$GITHUB_OUTPUT"
+
+      - name: Tear down droplet and SSH key
+        if: always()
+        env:
+          DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+          DROPLET_ID: ${{ steps.droplet.outputs.droplet_id }}
+          SSH_KEY_ID: ${{ steps.register_key.outputs.key_id }}
+        run: |
+          set +e
+          deleted=true
+          errors=()
+
+          if [ -n "${DROPLET_ID}" ]; then
+            curl -fsSL \
+              -X DELETE \
+              -H "Authorization: Bearer ${DIGITAL_OCEAN_TOKEN}" \
+              "https://api.digitalocean.com/v2/droplets/${DROPLET_ID}" >/dev/null || {
+                deleted=false
+                errors+=("droplet_delete_failed")
+              }
+          fi
+
+          if [ -n "${SSH_KEY_ID}" ]; then
+            curl -fsSL \
+              -X DELETE \
+              -H "Authorization: Bearer ${DIGITAL_OCEAN_TOKEN}" \
+              "https://api.digitalocean.com/v2/account/keys/${SSH_KEY_ID}" >/dev/null || {
+                deleted=false
+                errors+=("ssh_key_delete_failed")
+              }
+          fi
+
+          jq -n \
+            --arg size "${{ matrix.size }}" \
+            --arg droplet_id "${DROPLET_ID}" \
+            --arg deleted_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson deleted "$deleted" \
+            --argjson errors "$(printf '%s\n' "${errors[@]:-}" | jq -R . | jq -s 'map(select(length > 0))')" \
+            '{size: $size, dropletId: $droplet_id, deleted: $deleted, deletedAt: $deleted_at, errors: $errors}' \
+            > "artifacts/${{ matrix.size }}/teardown.json"
+
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.size }}
+          path: artifacts/${{ matrix.size }}
+          retention-days: 5
+
+  aggregate:
+    runs-on: ubuntu-latest
+    needs:
+      - preflight
+      - benchmark
+    if: always() && needs.preflight.outputs.run_enabled == 'true'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download benchmark artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: perf-artifacts
+
+      - name: Aggregate performance results
+        run: |
+          set -euo pipefail
+          node perf/aggregate-results.mjs \
+            --inputDir perf-artifacts \
+            --outputDir perf-output \
+            --expectedSizes "${EXPECTED_SIZES}"
+
+      - name: Upload aggregate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-aggregate
+          path: perf-output
+          retention-days: 5
+
+      - name: Append workflow summary
+        if: always()
+        run: cat perf-output/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish PR comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const marker = '<!-- traffic-data-performance-report -->';
+            const body = `${marker}\n${fs.readFileSync('perf-output/comment.md', 'utf8')}`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find((comment) => comment.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

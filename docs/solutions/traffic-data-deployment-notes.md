@@ -27,14 +27,35 @@ The external deployment repository can keep its existing Ansible ownership as lo
 
 `VITE_POSTGREST_BASE_URL` remains optional for local Vite development. The packaged runtime does not require a build-time frontend URL because Fastify serves browser config at request time.
 
-## Deferred performance path
+## DigitalOcean performance path
 
-There is no current performance gate on this delivery slice. Performance work is deferred, not omitted.
+Performance verification is part of the active delivery slice.
 
-The intended follow-up sequence is:
+The repository now carries a repo-local `deploy/` toolkit plus a GitHub Actions performance workflow that:
 
-1. `5 RPS`: validate the deployed VPS path, baseline latency, and PostgREST/browser connectivity under light concurrent traffic.
-2. `50 RPS`: identify backend, database, or network bottlenecks and apply focused query, indexing, or container tuning.
-3. `500 RPS`: decide whether the existing single-node shape still holds or whether higher-order changes are needed.
+1. builds one PR-scoped image from the candidate branch
+2. provisions three representative single-node DigitalOcean droplets in parallel
+3. deploys `api`, `postgrest`, and `postgres` on each droplet
+4. runs sequential `5 RPS`, `50 RPS`, and `500 RPS` phases against the deployed read path
+5. captures host, health, and PostgreSQL snapshots after each phase
+6. aggregates the results into a workflow summary, uploaded artifacts, and a PR-visible report
 
-Each checkpoint should run against the remote VPS deployment rather than a developer laptop so the measurements reflect the real deployment path.
+The representative size matrix is:
+
+- `s-1vcpu-1gb`
+- `s-1vcpu-2gb`
+- `s-2vcpu-4gb`
+
+This slice remains intentionally single-node.
+It explains single-node hardware scaling dynamics rather than horizontal scaling behavior.
+
+## Verification contract
+
+The performance workflow is expected to prove all of these:
+
+- same-repo pull requests can provision and tear down the review testbed with `DIGITAL_OCEAN_TOKEN`
+- the remote host can pull the candidate image from GHCR with `GH_PAT`
+- every VPS-size leg uploads raw benchmark artifacts and teardown evidence
+- the aggregate job fails when an expected size artifact or teardown record is missing
+
+Fork pull requests do not receive the necessary deploy secrets, so the workflow must report a safe skip state instead of attempting the deploy path.

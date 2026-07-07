@@ -1,0 +1,7 @@
+all:
+  hosts:
+    prod:
+      ansible_host: "{{ lookup('ansible.builtin.env', 'SERVER_PROD') }}"
+      ansible_user: "{{ lookup('ansible.builtin.env', 'SERVER_PROD_USER') | default('root', true) }}"
+      project: "{{ lookup('ansible.builtin.env', 'SERVER_PROD_PROJECT_DIR') | default('/root/traffic-data-web-app', true) }}"
+

@@ -41,19 +41,49 @@ For local Docker Compose usage, the backend serves the frontend on `http://local
 - Frontend tests: `npm --prefix frontend run test`
 - Backend feature tests: `DATABASE_URL=postgres://postgres:postgres@localhost:55432/traffic_data POSTGREST_BASE_URL=http://localhost:3001 npm --prefix backend run test:feature`
 - Packaged runtime: `docker compose up -d --build api postgrest postgres`
+- Deploy scaffold validity: `docker compose -f deploy/docker-compose.yml config` and `ansible-playbook -i deploy/inventory.yml deploy/prod.yml --syntax-check`
+- Perf helper tests: `node --test perf/*.test.mjs`
 
 ## CI/CD
 
-- Pull requests run build and test only through `.github/workflows/ci.yml`.
+- Pull requests run build and test through `.github/workflows/ci.yml`.
+- Trusted pull requests in the main repository also run `.github/workflows/performance.yml`, which:
+  - builds one PR-scoped image
+  - deploys it to three single-node DigitalOcean droplet sizes in parallel
+  - benchmarks the deployed PostgREST-backed read path at 5, 50, and 500 RPS
+  - uploads raw artifacts plus an aggregate summary
+  - updates a PR comment with the comparison report
 - Pushes to `main` build and publish `ghcr.io/<owner>/<repo>:<sha>` through `.github/workflows/build.yml`.
 - No workflow emits a `latest` tag.
 
+Fork pull requests do not run the secret-backed performance deployment path.
+The workflow emits a safe skip state instead of trying to deploy with missing credentials.
+
+## Performance workflow setup
+
+Configure these GitHub Actions secrets before expecting the performance workflow to pass:
+
+- `DIGITAL_OCEAN_TOKEN`: used to create and destroy review droplets
+- `GH_PAT`: used by the remote droplet to authenticate to GHCR and pull the PR-scoped image
+
+Representative VPS sizes:
+
+- `s-1vcpu-1gb`
+- `s-1vcpu-2gb`
+- `s-2vcpu-4gb`
+
+Each matrix leg publishes:
+
+- raw k6 summary output per phase
+- host and PostgreSQL snapshots captured after each phase
+- a leg-level `result.json`
+- teardown evidence
+
+The aggregate job fails when a size artifact is missing or teardown evidence is incomplete, even if one or more benchmark phases produced latency data.
+
 ## Deployment handoff
 
-The external VPS/Ansible repo only needs:
+Repo-local VPS deployment lives in [`deploy/`](deploy/README.md).
+It reuses the referenced SSH-plus-Ansible deployment pattern but points it at this repo's immutable image runtime.
 
-- the published image reference `ghcr.io/<owner>/<repo>:<sha>`
-- runtime environment values from `.env.example`
-- a public URL for PostgREST that the browser can reach
-
-See [`docs/solutions/traffic-data-deployment-notes.md`](docs/solutions/traffic-data-deployment-notes.md) for the deferred performance path and VPS expectations.
+See [`docs/solutions/traffic-data-deployment-notes.md`](docs/solutions/traffic-data-deployment-notes.md) for the DigitalOcean testbed contract and benchmark expectations.

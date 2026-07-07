@@ -1,0 +1,27 @@
+---
+- hosts: prod
+  tasks:
+    - name: Create project directory
+      file:
+        path: "{{ project }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy deploy runtime files
+      synchronize:
+        src: "{{ item.src }}"
+        dest: "{{ project }}/{{ item.dest }}"
+      loop:
+        - src: docker-compose.yml
+          dest: docker-compose.yml
+        - src: prod/.env
+          dest: .env
+
+    - name: Create runtime directories
+      file:
+        path: "{{ project }}/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - artifacts
+
