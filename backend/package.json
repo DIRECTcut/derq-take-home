@@ -1,0 +1,33 @@
+{
+  "name": "traffic-data-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "db:migrate": "npm run build && node dist/scripts/runMigrations.js",
+    "seed:traffic-data": "npm run build && node dist/scripts/seedTrafficData.js",
+    "test": "vitest run",
+    "test:feature": "vitest run tests/feature"
+  },
+  "dependencies": {
+    "csv-parse": "6.1.0",
+    "fastify": "5.10.0",
+    "fastify-plugin": "^6.0.0",
+    "jsonwebtoken": "9.0.2",
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "9.0.10",
+    "@types/node": "24.0.14",
+    "@types/pg": "^8.20.0",
+    "tsx": "4.20.3",
+    "typescript": "5.8.3",
+    "vitest": "3.2.4"
+  }
+}

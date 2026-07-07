@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: traffic_data
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d traffic_data"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  postgrest:
+    image: postgrest/postgrest:v14.14
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./infra/postgrest/postgrest.conf:/etc/postgrest.conf:ro
+    command: ["postgrest", "/etc/postgrest.conf"]
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/traffic_data
+      POSTGREST_BASE_URL: http://postgrest:3000
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
