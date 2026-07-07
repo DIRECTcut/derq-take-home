@@ -35,6 +35,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/traffic_data
+      FRONTEND_DIST_DIR: /app/frontend/dist
       POSTGREST_BASE_URL: http://postgrest:3000
       PORT: "3000"
     ports:

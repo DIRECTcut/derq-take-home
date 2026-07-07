@@ -1,5 +1,6 @@
 export type AppConfig = {
   databaseUrl: string;
+  frontendDistDir: string;
   port: number;
   postgrestBaseUrl: string;
   postgrestJwtSecret: string;
@@ -8,6 +9,7 @@ export type AppConfig = {
 };
 
 const DEFAULT_PORT = 3000;
+const DEFAULT_FRONTEND_DIST_DIR = 'frontend/dist';
 const DEFAULT_POSTGREST_BASE_URL = 'http://localhost:3001';
 const DEFAULT_POSTGREST_JWT_SECRET = 'super-secret-admin-key-for-local-dev-32';
 const DEFAULT_POSTGREST_ANON_ROLE = 'web_anon';
@@ -35,6 +37,7 @@ export function buildConfig(source: NodeJS.ProcessEnv = process.env): AppConfig 
 
   return {
     databaseUrl,
+    frontendDistDir: source.FRONTEND_DIST_DIR ?? DEFAULT_FRONTEND_DIST_DIR,
     port: parsePort(source.PORT),
     postgrestBaseUrl: source.POSTGREST_BASE_URL ?? DEFAULT_POSTGREST_BASE_URL,
     postgrestJwtSecret: source.POSTGREST_JWT_SECRET ?? DEFAULT_POSTGREST_JWT_SECRET,
