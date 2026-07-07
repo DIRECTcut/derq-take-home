@@ -19,7 +19,7 @@ WORKDIR /app/backend
 COPY --from=backend-deps /app/backend/node_modules ./node_modules
 COPY backend/package.json backend/package-lock.json ./
 COPY backend/ ./
-COPY db/seed-data /app/db/seed-data
+COPY db/ /app/db/
 RUN npm run build
 
 FROM node:24 AS runtime
@@ -29,7 +29,7 @@ COPY --from=backend-build /app/backend/dist ./backend/dist
 COPY --from=backend-build /app/backend/node_modules ./backend/node_modules
 COPY --from=backend-build /app/backend/package.json ./backend/package.json
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
-COPY db/seed-data /app/db/seed-data
+COPY db/ /app/db/
 WORKDIR /app/backend
 EXPOSE 3000
 CMD ["node", "dist/server.js"]
