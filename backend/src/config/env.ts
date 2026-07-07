@@ -1,4 +1,6 @@
 export type AppConfig = {
+  adminPassword: string;
+  adminUsername: string;
   databaseUrl: string;
   frontendDistDir: string;
   port: number;
@@ -29,13 +31,25 @@ function parsePort(value: string | undefined): number {
 }
 
 export function buildConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
+  const adminUsername = source.ADMIN_USERNAME;
+  const adminPassword = source.ADMIN_PASSWORD;
   const databaseUrl = source.DATABASE_URL;
 
   if (!databaseUrl?.trim()) {
     throw new Error('DATABASE_URL is required');
   }
 
+  if (!adminUsername?.trim()) {
+    throw new Error('ADMIN_USERNAME is required');
+  }
+
+  if (!adminPassword?.trim()) {
+    throw new Error('ADMIN_PASSWORD is required');
+  }
+
   return {
+    adminPassword,
+    adminUsername,
     databaseUrl,
     frontendDistDir: source.FRONTEND_DIST_DIR ?? DEFAULT_FRONTEND_DIST_DIR,
     port: parsePort(source.PORT),

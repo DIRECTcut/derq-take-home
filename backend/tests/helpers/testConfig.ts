@@ -2,6 +2,8 @@ import type { AppConfig } from '../../src/config/env.js';
 
 export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
+    adminPassword: process.env.ADMIN_PASSWORD ?? 'local-admin-password',
+    adminUsername: process.env.ADMIN_USERNAME ?? 'admin',
     databaseUrl: process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:55432/traffic_data',
     frontendDistDir: process.env.FRONTEND_DIST_DIR ?? 'frontend/dist',
     port: 3000,

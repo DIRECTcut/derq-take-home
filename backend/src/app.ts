@@ -3,6 +3,7 @@ import { buildConfig, type AppConfig } from './config/env.js';
 import dbPlugin from './plugins/db.js';
 import postgrestPlugin from './plugins/postgrest.js';
 import staticPlugin from './plugins/static.js';
+import { registerAdminAuthRoutes } from './routes/adminAuth.js';
 import { registerAppRoutes } from './routes/app.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerSystemRoutes } from './routes/system.js';
@@ -19,6 +20,7 @@ export async function buildApp(configOverrides?: AppConfig): Promise<FastifyInst
 
   await registerHealthRoutes(app);
   await registerSystemRoutes(app);
+  await registerAdminAuthRoutes(app, { config });
   await registerAppRoutes(app);
 
   return app;
