@@ -42,6 +42,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      ADMIN_USERNAME: ${DEPLOY_ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${DEPLOY_ADMIN_PASSWORD:-local-admin-password}
       DATABASE_URL: postgres://${DEPLOY_POSTGRES_USER:-postgres}:${DEPLOY_POSTGRES_PASSWORD:-postgres}@postgres:5432/${DEPLOY_POSTGRES_DB:-traffic_data}
       FRONTEND_DIST_DIR: /app/frontend/dist
       PORT: 3000

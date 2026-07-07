@@ -248,6 +248,8 @@ jobs:
           REGISTRY_USERNAME=${GITHUB_REPOSITORY_OWNER}
           REGISTRY_PASSWORD=${GH_PAT}
           DEPLOY_IMAGE=${IMAGE_REF}
+          DEPLOY_ADMIN_USERNAME=admin
+          DEPLOY_ADMIN_PASSWORD=perf-admin-password
           DEPLOY_POSTGRES_DB=traffic_data
           DEPLOY_POSTGRES_USER=postgres
           DEPLOY_POSTGRES_PASSWORD=postgres
@@ -261,6 +263,8 @@ jobs:
 
           cat > deploy/prod/.env <<EOF
           DEPLOY_IMAGE=${IMAGE_REF}
+          DEPLOY_ADMIN_USERNAME=admin
+          DEPLOY_ADMIN_PASSWORD=perf-admin-password
           DEPLOY_POSTGRES_DB=traffic_data
           DEPLOY_POSTGRES_USER=postgres
           DEPLOY_POSTGRES_PASSWORD=postgres

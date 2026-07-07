@@ -19,6 +19,8 @@ The external deployment repository can keep its existing Ansible ownership as lo
 ## Environment contract
 
 - `DATABASE_URL`: PostgreSQL connection string for Fastify migrations and startup
+- `DEPLOY_ADMIN_USERNAME`: admin login username injected into the API container
+- `DEPLOY_ADMIN_PASSWORD`: admin login password injected into the API container
 - `ADMIN_USERNAME`: admin login username used by the Fastify auth route
 - `ADMIN_PASSWORD`: admin login password used by the Fastify auth route
 - `FRONTEND_DIST_DIR`: path to the built frontend assets inside the runtime container
