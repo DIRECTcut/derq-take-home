@@ -4,6 +4,20 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
+apt_retry() {
+  local attempt
+
+  for attempt in 1 2 3 4 5; do
+    if apt "$@"; then
+      return 0
+    fi
+
+    sleep $((attempt * 5))
+  done
+
+  return 1
+}
+
 project_dir="${PROJECT_DIR:-/root/traffic-data-web-app}"
 root_login_mode="${ROOT_LOGIN_MODE:-prohibit-password}"
 target_user="${TARGET_USER:-$(id -un)}"
@@ -21,9 +35,9 @@ if [ ! -s "$authorized_keys" ]; then
   exit 1
 fi
 
-apt update
-apt upgrade -y
-apt install -y \
+apt_retry update
+apt_retry upgrade -y
+apt_retry install -y \
   ca-certificates \
   curl \
   git \
@@ -47,8 +61,8 @@ cat > /etc/apt/sources.list.d/docker.list <<EOF
 deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable
 EOF
 
-apt update
-apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+apt_retry update
+apt_retry install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 mkdir -p "$project_dir"
 
@@ -67,4 +81,3 @@ systemctl reload ssh || systemctl reload sshd
 echo "Bootstrap complete."
 echo "Project directory: $project_dir"
 echo "SSH password authentication disabled."
-
