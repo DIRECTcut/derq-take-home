@@ -14,6 +14,7 @@ services:
       retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
 
   postgrest:
     image: postgrest/postgrest:v14.14
