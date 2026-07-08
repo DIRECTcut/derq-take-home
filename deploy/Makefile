@@ -22,13 +22,13 @@ prod-login:
 	@$(SSH) $(REMOTE) "echo '$(REGISTRY_PASSWORD)' | docker login $(REGISTRY_HOST) -u '$(REGISTRY_USERNAME)' --password-stdin"
 
 prod-up:
-	@$(SSH_TTY) $(REMOTE) "cd $(REMOTE_PROJECT) && docker compose pull && docker compose up -d postgres && docker compose run --rm api node dist/scripts/runMigrations.js && docker compose run --rm api node dist/scripts/seedTrafficData.js && docker compose up -d postgrest api"
+	@$(SSH_TTY) $(REMOTE) "cd $(REMOTE_PROJECT) && docker compose pull && docker compose up -d postgres && docker compose run --rm api node dist/scripts/runMigrations.js && docker compose run --rm api node dist/scripts/seedTrafficData.js && docker compose up -d api"
 
 prod-restart:
-	@$(SSH_TTY) $(REMOTE) "cd $(REMOTE_PROJECT) && docker compose restart api postgrest postgres"
+	@$(SSH_TTY) $(REMOTE) "cd $(REMOTE_PROJECT) && docker compose restart api postgres"
 
 prod-logs:
-	@$(SSH_TTY) $(REMOTE) "cd $(REMOTE_PROJECT) && docker compose logs -f api postgrest postgres"
+	@$(SSH_TTY) $(REMOTE) "cd $(REMOTE_PROJECT) && docker compose logs -f api postgres"
 
 prod-ssh:
 	@$(SSH_TTY) $(REMOTE) "cd $(REMOTE_PROJECT) && exec bash -l"
@@ -58,4 +58,3 @@ help:
 	@echo "  prod-seed    - Seed traffic data on the VPS"
 	@echo "  prod-status  - Show remote docker compose status"
 	@echo "  prod-down    - Stop and remove the stack with volumes"
-

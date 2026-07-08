@@ -29,11 +29,10 @@ make prod-up
 
 ## Runtime contract
 
-The remote stack runs three containers:
+The remote stack runs two containers:
 
 - `postgres` for the source-of-truth database
-- `postgrest` for chart-facing read models
-- `api` for the Fastify runtime and built frontend assets
+- `api` for the Fastify runtime, built frontend assets, public read routes, and admin routes
 
 The deploy path is image-driven.
 The host does not build application source.
@@ -61,6 +60,5 @@ It is expected to:
 1. create an ephemeral SSH key pair
 2. register the public key with DigitalOcean
 3. create one or more review droplets
-4. write droplet-specific values such as `SERVER_PROD`, `DEPLOY_IMAGE`, and `DEPLOY_PUBLIC_POSTGREST_URL`
+4. write droplet-specific values such as `SERVER_PROD` and `DEPLOY_IMAGE`
 5. run `make prod-init`, `make prod`, `make prod-login`, and `make prod-up`
-

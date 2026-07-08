@@ -33,24 +33,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
 
-  postgrest:
-    image: postgrest/postgrest:v14.14
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PGRST_DB_POOL: ${PGRST_DB_POOL:-10}
-      PGRST_DB_POOL_ACQUISITION_TIMEOUT: ${PGRST_DB_POOL_ACQUISITION_TIMEOUT:-10}
-      PGRST_DB_POOL_MAX_LIFETIME: ${PGRST_DB_POOL_MAX_LIFETIME:-1800}
-      PGRST_DB_POOL_MAX_IDLETIME: ${PGRST_DB_POOL_MAX_IDLETIME:-30}
-      PGRST_LOG_LEVEL: ${PGRST_LOG_LEVEL:-error}
-      PGRST_SERVER_TIMING_ENABLED: ${PGRST_SERVER_TIMING_ENABLED:-false}
-    ports:
-      - "3001:3000"
-    volumes:
-      - ./infra/postgrest/postgrest.conf:/etc/postgrest.conf:ro
-    command: ["postgrest", "/etc/postgrest.conf"]
-
   api:
     build:
       context: .
@@ -59,9 +41,13 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:-super-secret-admin-key-for-local-dev-32}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-local-admin-password}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/traffic_data
+      DATABASE_POOL_CONNECTION_TIMEOUT_MS: ${DATABASE_POOL_CONNECTION_TIMEOUT_MS:-10000}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
       FRONTEND_DIST_DIR: /app/frontend/dist
-      POSTGREST_BASE_URL: http://postgrest:3000
       PORT: "3000"
     ports:
       - "3000:3000"
