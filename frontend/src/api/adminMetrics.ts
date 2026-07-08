@@ -1,5 +1,5 @@
 import type { AdminReferenceOption, TrafficMetricInput } from '../types/admin';
-import { resolvePostgrestBaseUrl } from './traffic';
+import { resolveApiBaseUrl } from './traffic';
 
 type CountryRow = {
   code: string;
@@ -62,15 +62,15 @@ function toVehicleTypeOption(row: VehicleTypeRow): AdminReferenceOption {
   };
 }
 
-export function createAdminMetricsApi(baseUrl = resolvePostgrestBaseUrl()) {
+export function createAdminMetricsApi(baseUrl = resolveApiBaseUrl()) {
   return {
     async fetchFormOptions(token: string): Promise<{
       countries: AdminReferenceOption[];
       vehicleTypes: AdminReferenceOption[];
     }> {
       const [countries, vehicleTypes] = await Promise.all([
-        fetchRows<CountryRow>(baseUrl, '/countries?select=id,code,name&order=name.asc', token),
-        fetchRows<VehicleTypeRow>(baseUrl, '/vehicle_types?select=id,name,unit&order=name.asc', token),
+        fetchRows<CountryRow>(baseUrl, '/api/admin/countries', token),
+        fetchRows<VehicleTypeRow>(baseUrl, '/api/admin/vehicle-types', token),
       ]);
 
       return {
@@ -80,22 +80,20 @@ export function createAdminMetricsApi(baseUrl = resolvePostgrestBaseUrl()) {
     },
 
     async createTrafficMetric(token: string, payload: TrafficMetricInput): Promise<void> {
-      const response = await fetch(`${baseUrl}/traffic_metrics`, {
+      const response = await fetch(`${baseUrl}/api/admin/traffic-metrics`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify([
-          {
-            country_id: payload.countryId,
-            vehicle_type_id: payload.vehicleTypeId,
-            time_period: payload.timePeriod,
-            observation_value: payload.observationValue,
-            observation_flag: payload.observationFlag || null,
-            confidentiality_status: payload.confidentialityStatus || null,
-          },
-        ]),
+        body: JSON.stringify({
+          countryId: payload.countryId,
+          vehicleTypeId: payload.vehicleTypeId,
+          timePeriod: payload.timePeriod,
+          observationValue: payload.observationValue,
+          observationFlag: payload.observationFlag || null,
+          confidentialityStatus: payload.confidentialityStatus || null,
+        }),
       });
 
       if (response.status === 201) {

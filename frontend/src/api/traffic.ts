@@ -4,10 +4,10 @@ import type {
   VehicleDistributionDatum,
 } from '../types/traffic';
 
-const DEFAULT_POSTGREST_BASE_URL = 'http://localhost:3001';
+const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 
 type EnvSource = {
-  VITE_POSTGREST_BASE_URL?: string;
+  VITE_API_BASE_URL?: string;
 };
 
 type CountryTrafficRow = {
@@ -34,16 +34,17 @@ export class TrafficApiError extends Error {
   }
 }
 
-export function resolvePostgrestBaseUrl(env: EnvSource = import.meta.env as EnvSource): string {
+export function resolveApiBaseUrl(env: EnvSource = import.meta.env as EnvSource): string {
   const candidate =
-    window.__TRAFFIC_DATA_CONFIG__?.postgrestBaseUrl ??
-    env.VITE_POSTGREST_BASE_URL ??
-    DEFAULT_POSTGREST_BASE_URL;
+    window.__TRAFFIC_DATA_CONFIG__?.apiBaseUrl ??
+    env.VITE_API_BASE_URL ??
+    window.location.origin ??
+    DEFAULT_API_BASE_URL;
 
   try {
     return new URL(candidate).toString().replace(/\/$/, '');
   } catch {
-    throw new TrafficApiError(`Invalid VITE_POSTGREST_BASE_URL value: ${candidate}`);
+    throw new TrafficApiError(`Invalid VITE_API_BASE_URL value: ${candidate}`);
   }
 }
 
@@ -105,17 +106,14 @@ async function fetchRows<T>(baseUrl: string, path: string): Promise<T[]> {
   return payload as T[];
 }
 
-export function createTrafficApi(baseUrl = resolvePostgrestBaseUrl()) {
+export function createTrafficApi(baseUrl = resolveApiBaseUrl()) {
   return {
     async fetchDashboardData(): Promise<DashboardData> {
       const [countryRows, vehicleRows] = await Promise.all([
-        fetchRows<CountryTrafficRow>(
-          baseUrl,
-          '/country_traffic_latest?select=country_code,country_name,time_period,observation_value,vehicle_type_name&order=observation_value.desc',
-        ),
+        fetchRows<CountryTrafficRow>(baseUrl, '/api/dashboard/country-traffic'),
         fetchRows<VehicleDistributionRow>(
           baseUrl,
-          '/vehicle_type_distribution_latest?select=vehicle_type_slug,vehicle_type_name,unit,countries_reported,average_observation_value,total_observation_value',
+          '/api/dashboard/vehicle-distribution',
         ),
       ]);
 

@@ -1,4 +1,4 @@
-import { createTrafficApi, resolvePostgrestBaseUrl, TrafficApiError } from './traffic';
+import { createTrafficApi, resolveApiBaseUrl, TrafficApiError } from './traffic';
 
 describe('traffic api adapter', () => {
   afterEach(() => {
@@ -40,7 +40,7 @@ describe('traffic api adapter', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const api = createTrafficApi('http://localhost:3001');
+    const api = createTrafficApi('http://localhost:3000');
     const data = await api.fetchDashboardData();
 
     expect(data.countryTraffic[0]).toMatchObject({
@@ -65,7 +65,7 @@ describe('traffic api adapter', () => {
         .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 })),
     );
 
-    const api = createTrafficApi('http://localhost:3001');
+    const api = createTrafficApi('http://localhost:3000');
 
     await expect(api.fetchDashboardData()).rejects.toThrow(TrafficApiError);
   });
@@ -73,23 +73,23 @@ describe('traffic api adapter', () => {
   it('surfaces transport failures as actionable errors', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
 
-    const api = createTrafficApi('http://localhost:3001');
+    const api = createTrafficApi('http://localhost:3000');
 
     await expect(api.fetchDashboardData()).rejects.toThrow('Traffic data request failed with status 503');
   });
 
   it('validates the configured PostgREST base url', () => {
-    expect(() => resolvePostgrestBaseUrl({ VITE_POSTGREST_BASE_URL: 'not-a-url' })).toThrow(
-      'Invalid VITE_POSTGREST_BASE_URL value: not-a-url',
+    expect(() => resolveApiBaseUrl({ VITE_API_BASE_URL: 'not-a-url' })).toThrow(
+      'Invalid VITE_API_BASE_URL value: not-a-url',
     );
   });
 
   it('prefers runtime configuration over the build-time fallback', () => {
     window.__TRAFFIC_DATA_CONFIG__ = {
-      postgrestBaseUrl: 'https://runtime.example.com',
+      apiBaseUrl: 'https://runtime.example.com',
     };
 
-    expect(resolvePostgrestBaseUrl({ VITE_POSTGREST_BASE_URL: 'http://localhost:3001' })).toBe(
+    expect(resolveApiBaseUrl({ VITE_API_BASE_URL: 'http://localhost:3000' })).toBe(
       'https://runtime.example.com',
     );
   });
