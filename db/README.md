@@ -1,10 +1,10 @@
 # Database Notes
 
-`db/migrations/` contains the PostgreSQL schema, role, and read-model definitions for the Stage `0-2` backend slice.
+`db/migrations/` contains the PostgreSQL schema and read-model definitions for the runtime.
 
 - `001_initial_schema.sql` creates the runtime tables.
-- `002_postgrest_roles.sql` creates the roles used by PostgREST.
-- `003_read_models.sql` creates the chart-facing views and grants.
+- `002_postgrest_roles.sql` removes the legacy PostgREST roles from fresh or reset databases.
+- `003_read_models.sql` creates the chart-facing views used by Fastify.
 
 Apply the migrations with:
 

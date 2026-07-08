@@ -7,29 +7,27 @@ The deployable unit from this repository is the Docker image built from `backend
 The runtime still depends on:
 
 - PostgreSQL for the source-of-truth dataset
-- PostgREST for read models and admin-only write exposure
-- a public browser path to PostgREST because the Vue frontend reads PostgREST directly
+- Fastify for app delivery plus all public/admin HTTP routes
 
 The external deployment repository can keep its existing Ansible ownership as long as it can:
 
 1. pull `ghcr.io/<owner>/<repo>:<sha>`
 2. inject the environment variables from `.env.example`
-3. publish both the Fastify app URL and the PostgREST URL
+3. publish the Fastify app URL
 
 ## Environment contract
 
 - `DATABASE_URL`: PostgreSQL connection string for Fastify migrations and startup
+- `ADMIN_JWT_SECRET`: JWT secret used by Fastify to mint and verify admin sessions
 - `DEPLOY_ADMIN_USERNAME`: admin login username injected into the API container
 - `DEPLOY_ADMIN_PASSWORD`: admin login password injected into the API container
 - `ADMIN_USERNAME`: admin login username used by the Fastify auth route
 - `ADMIN_PASSWORD`: admin login password used by the Fastify auth route
+- `DATABASE_POOL_MAX`: Fastify-side PostgreSQL pool size
+- `DATABASE_POOL_CONNECTION_TIMEOUT_MS`: Fastify-side PostgreSQL pool acquisition timeout
 - `FRONTEND_DIST_DIR`: path to the built frontend assets inside the runtime container
-- `POSTGREST_BASE_URL`: PostgREST base URL that the backend exposes through `/system/runtime` and `/app-config.js`
-- `POSTGREST_JWT_SECRET`: shared JWT secret for admin-only PostgREST writes
-- `POSTGREST_ANON_ROLE`: PostgREST anonymous read role
-- `POSTGREST_ADMIN_ROLE`: PostgREST admin write role
 
-`VITE_POSTGREST_BASE_URL` and `VITE_ADMIN_API_BASE_URL` remain local-Vite overrides only. The packaged runtime does not require build-time frontend URLs because Fastify serves the browser runtime config and the admin login posts back to the same origin.
+`VITE_API_BASE_URL` and `VITE_ADMIN_API_BASE_URL` remain local-Vite overrides only. The packaged runtime does not require build-time frontend URLs because Fastify serves the browser runtime config and the admin login posts back to the same origin.
 
 ## DigitalOcean performance path
 
@@ -39,8 +37,8 @@ The repository now carries a repo-local `deploy/` toolkit plus a GitHub Actions 
 
 1. builds one PR-scoped image from the candidate branch
 2. provisions three representative single-node DigitalOcean droplets in parallel
-3. deploys `api`, `postgrest`, and `postgres` on each droplet
-4. runs sequential `5 RPS`, `50 RPS`, and `500 RPS` phases against the deployed read path
+3. deploys `api` and `postgres` on each droplet
+4. runs sequential `5 RPS`, `50 RPS`, and `500 RPS` phases against the deployed Fastify read path
 5. captures host, health, and PostgreSQL snapshots after each phase
 6. aggregates the results into a workflow summary, uploaded artifacts, and a PR-visible report
 

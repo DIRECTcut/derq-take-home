@@ -73,8 +73,8 @@ function parsePhase(phase) {
       health: {
         metricsCaptured: false,
         appReadyCaptured: false,
-        postgrestCountryCaptured: false,
-        postgrestVehicleCaptured: false,
+        apiCountryCaptured: false,
+        apiVehicleCaptured: false,
         metadata: null,
       },
       passed: false,
@@ -123,8 +123,8 @@ function parsePhase(phase) {
     health: {
       metricsCaptured: fs.existsSync(path.join(phase.metricsDir, 'metadata.json')),
       appReadyCaptured: fs.existsSync(path.join(phase.metricsDir, 'health-ready.json')),
-      postgrestCountryCaptured: fs.existsSync(path.join(phase.metricsDir, 'postgrest-country-head.txt')),
-      postgrestVehicleCaptured: fs.existsSync(path.join(phase.metricsDir, 'postgrest-vehicle-head.txt')),
+      apiCountryCaptured: fs.existsSync(path.join(phase.metricsDir, 'api-country-head.txt')),
+      apiVehicleCaptured: fs.existsSync(path.join(phase.metricsDir, 'api-vehicle-head.txt')),
       metadata,
     },
     passed:
@@ -150,7 +150,7 @@ function main() {
     dropletId: manifest.dropletId,
     dropletIp: manifest.dropletIp,
     appUrl: manifest.appUrl,
-    postgrestUrl: manifest.postgrestUrl,
+    apiUrl: manifest.apiUrl,
     generatedAt: new Date().toISOString(),
     phases,
     overallPassed: phases.every((phase) => phase.passed),

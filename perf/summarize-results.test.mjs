@@ -75,8 +75,8 @@ test('summarize-results emits one result per leg with phase pass state', () => {
   fs.writeFileSync(summaryPath, JSON.stringify(makeSummary()));
   fs.writeFileSync(path.join(metricsDir, 'metadata.json'), JSON.stringify({ ok: true }));
   fs.writeFileSync(path.join(metricsDir, 'health-ready.json'), '{"status":"ok"}');
-  fs.writeFileSync(path.join(metricsDir, 'postgrest-country-head.txt'), '[]');
-  fs.writeFileSync(path.join(metricsDir, 'postgrest-vehicle-head.txt'), '[]');
+  fs.writeFileSync(path.join(metricsDir, 'api-country-head.txt'), '[]');
+  fs.writeFileSync(path.join(metricsDir, 'api-vehicle-head.txt'), '[]');
   fs.writeFileSync(
     manifestPath,
     JSON.stringify({
@@ -84,7 +84,7 @@ test('summarize-results emits one result per leg with phase pass state', () => {
       dropletId: '123',
       dropletIp: '203.0.113.10',
       appUrl: 'http://203.0.113.10:3000',
-      postgrestUrl: 'http://203.0.113.10:3001',
+      apiUrl: 'http://203.0.113.10:3000',
       phases: [
         {
           name: 'rps-50',
@@ -137,7 +137,7 @@ test('summarize-results marks a phase failed when latency breaches the threshold
       dropletId: '456',
       dropletIp: '203.0.113.20',
       appUrl: 'http://203.0.113.20:3000',
-      postgrestUrl: 'http://203.0.113.20:3001',
+      apiUrl: 'http://203.0.113.20:3000',
       phases: [
         {
           name: 'rps-500',
@@ -196,7 +196,7 @@ test('summarize-results supports flat k6 metric objects without nested values', 
       dropletId: 'local',
       dropletIp: '127.0.0.1',
       appUrl: 'http://127.0.0.1:3000',
-      postgrestUrl: 'http://127.0.0.1:3001',
+      apiUrl: 'http://127.0.0.1:3000',
       phases: [
         {
           name: 'flat-k6',

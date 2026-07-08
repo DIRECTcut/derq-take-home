@@ -248,33 +248,28 @@ jobs:
           REGISTRY_USERNAME=${GITHUB_REPOSITORY_OWNER}
           REGISTRY_PASSWORD=${GH_PAT}
           DEPLOY_IMAGE=${IMAGE_REF}
+          DEPLOY_ADMIN_JWT_SECRET=super-secret-admin-key-for-local-dev-32
           DEPLOY_ADMIN_USERNAME=admin
           DEPLOY_ADMIN_PASSWORD=perf-admin-password
+          DEPLOY_DATABASE_POOL_CONNECTION_TIMEOUT_MS=10000
+          DEPLOY_DATABASE_POOL_MAX=10
           DEPLOY_POSTGRES_DB=traffic_data
           DEPLOY_POSTGRES_USER=postgres
           DEPLOY_POSTGRES_PASSWORD=postgres
-          DEPLOY_POSTGREST_DB_URI=postgres://authenticator:localdev_authenticator_password@postgres:5432/traffic_data
-          DEPLOY_POSTGREST_JWT_SECRET=super-secret-admin-key-for-local-dev-32
-          DEPLOY_POSTGREST_ANON_ROLE=web_anon
-          DEPLOY_POSTGREST_ADMIN_ROLE=traffic_admin
           DEPLOY_APP_PORT=3000
-          DEPLOY_POSTGREST_PORT=3001
           EOF
 
           cat > deploy/prod/.env <<EOF
           DEPLOY_IMAGE=${IMAGE_REF}
+          DEPLOY_ADMIN_JWT_SECRET=super-secret-admin-key-for-local-dev-32
           DEPLOY_ADMIN_USERNAME=admin
           DEPLOY_ADMIN_PASSWORD=perf-admin-password
+          DEPLOY_DATABASE_POOL_CONNECTION_TIMEOUT_MS=10000
+          DEPLOY_DATABASE_POOL_MAX=10
           DEPLOY_POSTGRES_DB=traffic_data
           DEPLOY_POSTGRES_USER=postgres
           DEPLOY_POSTGRES_PASSWORD=postgres
-          DEPLOY_POSTGREST_DB_URI=postgres://authenticator:localdev_authenticator_password@postgres:5432/traffic_data
-          DEPLOY_POSTGREST_JWT_SECRET=super-secret-admin-key-for-local-dev-32
-          DEPLOY_POSTGREST_ANON_ROLE=web_anon
-          DEPLOY_POSTGREST_ADMIN_ROLE=traffic_admin
           DEPLOY_APP_PORT=3000
-          DEPLOY_POSTGREST_PORT=3001
-          DEPLOY_PUBLIC_POSTGREST_URL=http://${DROPLET_IP}:3001
           EOF
 
       - name: Deploy review stack
@@ -288,12 +283,11 @@ jobs:
       - name: Wait for application readiness
         env:
           APP_URL: http://${{ steps.droplet.outputs.droplet_ip }}:3000
-          POSTGREST_URL: http://${{ steps.droplet.outputs.droplet_ip }}:3001
         run: |
           set -euo pipefail
 
           for _ in $(seq 1 60); do
-            if curl -fsS "${APP_URL}/health/ready" >/dev/null && curl -fsS "${POSTGREST_URL}/country_traffic_latest?select=country_code&limit=1" >/dev/null; then
+            if curl -fsS "${APP_URL}/health/ready" >/dev/null && curl -fsS "${APP_URL}/api/dashboard/country-traffic" >/dev/null; then
               exit 0
             fi
             sleep 5
@@ -308,7 +302,6 @@ jobs:
           SSH_KEY_PATH: ${{ steps.ssh_key.outputs.private_key_path }}
           SSH_TARGET: ${{ steps.droplet.outputs.ssh_target }}
           APP_URL: http://${{ steps.droplet.outputs.droplet_ip }}:3000
-          POSTGREST_URL: http://${{ steps.droplet.outputs.droplet_ip }}:3001
           DROPLET_ID: ${{ steps.droplet.outputs.droplet_id }}
           DROPLET_IP: ${{ steps.droplet.outputs.droplet_ip }}
         run: |
@@ -334,7 +327,7 @@ jobs:
               -w /work \
               grafana/k6 run \
               --summary-export "$summary_path" \
-              -e TARGET_BASE_URL="$POSTGREST_URL" \
+              -e TARGET_BASE_URL="$APP_URL" \
               -e PHASE_NAME="$phase_name" \
               -e TARGET_RPS="$target_rps" \
               -e DURATION="$duration" \
@@ -346,7 +339,7 @@ jobs:
 
             REMOTE_PROJECT_DIR=/root/traffic-data-web-app \
             SSH_PRIVATE_KEY_PATH="$SSH_KEY_PATH" \
-            bash perf/collect-runtime-metrics.sh "$SSH_TARGET" "$phase_dir/metrics" "$APP_URL" "$POSTGREST_URL"
+            bash perf/collect-runtime-metrics.sh "$SSH_TARGET" "$phase_dir/metrics" "$APP_URL" "$APP_URL"
 
             if [ "$phase_status" -ne 0 ]; then
               benchmark_failed=true
@@ -363,7 +356,7 @@ jobs:
             "dropletId": "${DROPLET_ID}",
             "dropletIp": "${DROPLET_IP}",
             "appUrl": "${APP_URL}",
-            "postgrestUrl": "${POSTGREST_URL}",
+            "apiUrl": "${APP_URL}",
             "phases": [
               {
                 "name": "rps-5",

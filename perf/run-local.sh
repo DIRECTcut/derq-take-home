@@ -38,21 +38,14 @@ require_cmd curl
 
 export ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
 export ADMIN_PASSWORD="${ADMIN_PASSWORD:-local-admin-password}"
+export ADMIN_JWT_SECRET="${ADMIN_JWT_SECRET:-super-secret-admin-key-for-local-dev-32}"
 export DATABASE_URL="${DATABASE_URL:-postgres://postgres:postgres@localhost:55432/traffic_data}"
-export POSTGREST_BASE_URL="${POSTGREST_BASE_URL:-http://localhost:3001}"
-export POSTGREST_JWT_SECRET="${POSTGREST_JWT_SECRET:-super-secret-admin-key-for-local-dev-32}"
-export POSTGREST_ANON_ROLE="${POSTGREST_ANON_ROLE:-web_anon}"
-export POSTGREST_ADMIN_ROLE="${POSTGREST_ADMIN_ROLE:-traffic_admin}"
 export FRONTEND_DIST_DIR="${FRONTEND_DIST_DIR:-/app/frontend/dist}"
 
 if [ "$profile" = "capacity" ]; then
   think_time_seconds="${THINK_TIME_SECONDS:-0}"
-  : "${PGRST_DB_POOL:=50}"
-  : "${PGRST_DB_POOL_ACQUISITION_TIMEOUT:=30}"
-  : "${PGRST_DB_POOL_MAX_LIFETIME:=1800}"
-  : "${PGRST_DB_POOL_MAX_IDLETIME:=60}"
-  : "${PGRST_LOG_LEVEL:=warn}"
-  : "${PGRST_SERVER_TIMING_ENABLED:=true}"
+  : "${DATABASE_POOL_MAX:=50}"
+  : "${DATABASE_POOL_CONNECTION_TIMEOUT_MS:=30000}"
   : "${PG_MAX_CONNECTIONS:=200}"
   : "${PG_SHARED_BUFFERS:=256MB}"
   : "${PG_WORK_MEM:=8MB}"
@@ -62,12 +55,8 @@ if [ "$profile" = "capacity" ]; then
   : "${PG_WAL_BUFFERS:=16MB}"
 else
   think_time_seconds="${THINK_TIME_SECONDS:-0.1}"
-  : "${PGRST_DB_POOL:=10}"
-  : "${PGRST_DB_POOL_ACQUISITION_TIMEOUT:=10}"
-  : "${PGRST_DB_POOL_MAX_LIFETIME:=1800}"
-  : "${PGRST_DB_POOL_MAX_IDLETIME:=30}"
-  : "${PGRST_LOG_LEVEL:=error}"
-  : "${PGRST_SERVER_TIMING_ENABLED:=false}"
+  : "${DATABASE_POOL_MAX:=10}"
+  : "${DATABASE_POOL_CONNECTION_TIMEOUT_MS:=10000}"
   : "${PG_MAX_CONNECTIONS:=100}"
   : "${PG_SHARED_BUFFERS:=128MB}"
   : "${PG_WORK_MEM:=4MB}"
@@ -77,12 +66,8 @@ else
   : "${PG_WAL_BUFFERS:=4MB}"
 fi
 
-export PGRST_DB_POOL
-export PGRST_DB_POOL_ACQUISITION_TIMEOUT
-export PGRST_DB_POOL_MAX_LIFETIME
-export PGRST_DB_POOL_MAX_IDLETIME
-export PGRST_LOG_LEVEL
-export PGRST_SERVER_TIMING_ENABLED
+export DATABASE_POOL_MAX
+export DATABASE_POOL_CONNECTION_TIMEOUT_MS
 export PG_MAX_CONNECTIONS
 export PG_SHARED_BUFFERS
 export PG_WORK_MEM
@@ -92,7 +77,7 @@ export PG_CHECKPOINT_COMPLETION_TARGET
 export PG_WAL_BUFFERS
 
 app_url="${APP_URL:-http://localhost:3000}"
-postgrest_url="${POSTGREST_URL:-http://localhost:3001}"
+api_url="${API_URL:-$app_url}"
 admin_api_url="${ADMIN_API_URL:-$app_url}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
@@ -123,12 +108,12 @@ containerize_url() {
 
 capture_local_metrics() {
   local output_dir="$1"
-  local postgrest_container_id
   local postgres_container_id
+  local api_container_id
 
   mkdir -p "$output_dir"
-  postgrest_container_id="$(docker compose ps -q postgrest 2>/dev/null || true)"
   postgres_container_id="$(docker compose ps -q postgres 2>/dev/null || true)"
+  api_container_id="$(docker compose ps -q api 2>/dev/null || true)"
 
   if ! docker compose ps >"$output_dir/docker-compose-ps.txt" 2>&1; then
     printf 'command_failed\n' >>"$output_dir/docker-compose-ps.txt"
@@ -138,12 +123,12 @@ capture_local_metrics() {
     printf 'command_failed\n' >>"$output_dir/docker-stats.txt"
   fi
 
-  if [ -n "$postgrest_container_id" ]; then
-    if ! docker logs --since 10m "$postgrest_container_id" >"$output_dir/postgrest.log" 2>&1; then
-      printf 'command_failed\n' >>"$output_dir/postgrest.log"
+  if [ -n "$api_container_id" ]; then
+    if ! docker logs --since 10m "$api_container_id" >"$output_dir/api.log" 2>&1; then
+      printf 'command_failed\n' >>"$output_dir/api.log"
     fi
   else
-    printf 'container_not_found\n' >"$output_dir/postgrest.log"
+    printf 'container_not_found\n' >"$output_dir/api.log"
   fi
 
   if [ -n "$postgres_container_id" ]; then
@@ -162,23 +147,19 @@ capture_local_metrics() {
 
   curl -fsS "$app_url/system/runtime" >"$output_dir/system-runtime.json" || printf 'command_failed\n' >"$output_dir/system-runtime.json"
   curl -fsS "$app_url/health/ready" >"$output_dir/health-ready.json" || printf 'command_failed\n' >"$output_dir/health-ready.json"
-  curl -fsS "$postgrest_url/country_traffic_latest?select=country_code&limit=3" >"$output_dir/postgrest-country-head.txt" || printf 'command_failed\n' >"$output_dir/postgrest-country-head.txt"
-  curl -fsS "$postgrest_url/vehicle_type_distribution_latest?select=vehicle_type_slug&limit=3" >"$output_dir/postgrest-vehicle-head.txt" || printf 'command_failed\n' >"$output_dir/postgrest-vehicle-head.txt"
+  curl -fsS "$api_url/api/dashboard/country-traffic" >"$output_dir/api-country-head.txt" || printf 'command_failed\n' >"$output_dir/api-country-head.txt"
+  curl -fsS "$api_url/api/dashboard/vehicle-distribution" >"$output_dir/api-vehicle-head.txt" || printf 'command_failed\n' >"$output_dir/api-vehicle-head.txt"
 
   cat >"$output_dir/metadata.json" <<EOF
 {
   "capturedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "appUrl": "$app_url",
-  "postgrestUrl": "$postgrest_url",
+  "apiUrl": "$api_url",
   "phaseSet": "$phase_set",
   "profile": "$profile",
   "thinkTimeSeconds": "$think_time_seconds",
-  "postgrestDbPool": "$PGRST_DB_POOL",
-  "postgrestDbPoolAcquisitionTimeout": "$PGRST_DB_POOL_ACQUISITION_TIMEOUT",
-  "postgrestDbPoolMaxLifetime": "$PGRST_DB_POOL_MAX_LIFETIME",
-  "postgrestDbPoolMaxIdleTime": "$PGRST_DB_POOL_MAX_IDLETIME",
-  "postgrestLogLevel": "$PGRST_LOG_LEVEL",
-  "postgrestServerTimingEnabled": "$PGRST_SERVER_TIMING_ENABLED",
+  "databasePoolMax": "$DATABASE_POOL_MAX",
+  "databasePoolConnectionTimeoutMs": "$DATABASE_POOL_CONNECTION_TIMEOUT_MS",
   "pgMaxConnections": "$PG_MAX_CONNECTIONS",
   "pgSharedBuffers": "$PG_SHARED_BUFFERS",
   "pgWorkMem": "$PG_WORK_MEM",
@@ -216,10 +197,10 @@ run_phase() {
   mkdir -p "$phase_dir/metrics"
 
   local script_path="/work/perf/k6-dashboard.js"
-  local k6_postgrest_url
-  k6_postgrest_url="$(containerize_url "$postgrest_url")"
+  local k6_api_url
+  k6_api_url="$(containerize_url "$api_url")"
   local env_args=(
-    -e TARGET_BASE_URL="$k6_postgrest_url"
+    -e TARGET_BASE_URL="$k6_api_url"
   )
 
   if [ "$scenario" = "write" ]; then
@@ -243,7 +224,7 @@ run_phase() {
 
     script_path="/work/perf/k6-admin-writes.js"
     env_args=(
-      -e POSTGREST_URL="$k6_postgrest_url"
+      -e API_BASE_URL="$k6_api_url"
       -e ADMIN_TOKEN="$admin_token"
       -e COUNTRY_ID="$country_id"
       -e VEHICLE_TYPE_ID="$vehicle_type_id"
@@ -285,29 +266,32 @@ country_id=""
 vehicle_type_id=""
 
 cd "$repo_root"
-docker compose up -d --force-recreate postgres postgrest api
+docker compose up -d --build --force-recreate --remove-orphans postgres api
 wait_for_url "$app_url/health/ready" "api health"
-wait_for_url "$postgrest_url/country_traffic_latest?select=country_code&limit=1" "postgrest read path"
+wait_for_url "$api_url/api/dashboard/country-traffic" "api read path"
 
 npm --prefix backend run db:migrate
 npm --prefix backend run seed:traffic-data
 
 admin_token="$(
-  node --input-type=module -e \
-    "import jwt from './backend/node_modules/jsonwebtoken/index.js'; console.log(jwt.sign({ role: process.env.POSTGREST_ADMIN_ROLE }, process.env.POSTGREST_JWT_SECRET, { algorithm: 'HS256', expiresIn: '1h' }));"
+  curl -fsS \
+    -H 'Content-Type: application/json' \
+    -d "{\"username\":\"$ADMIN_USERNAME\",\"password\":\"$ADMIN_PASSWORD\"}" \
+    "$admin_api_url/admin/login" |
+    node --input-type=module -e "const payload = JSON.parse(await new Promise((resolve) => { let data=''; process.stdin.on('data', (chunk) => data += chunk); process.stdin.on('end', () => resolve(data)); })); if (typeof payload.token !== 'string') throw new Error('No admin token returned'); console.log(payload.token);"
 )"
 
 country_id="$(
   curl -fsS \
     -H "Authorization: Bearer $admin_token" \
-    "$postgrest_url/countries?select=id&order=id.asc&limit=1" |
+    "$api_url/api/admin/countries" |
     node --input-type=module -e "const payload = JSON.parse(await new Promise((resolve) => { let data=''; process.stdin.on('data', (chunk) => data += chunk); process.stdin.on('end', () => resolve(data)); })); if (!Array.isArray(payload) || payload.length === 0) throw new Error('No country seed rows found'); console.log(payload[0].id);"
 )"
 
 vehicle_type_id="$(
   curl -fsS \
     -H "Authorization: Bearer $admin_token" \
-    "$postgrest_url/vehicle_types?select=id&order=id.asc&limit=1" |
+    "$api_url/api/admin/vehicle-types" |
     node --input-type=module -e "const payload = JSON.parse(await new Promise((resolve) => { let data=''; process.stdin.on('data', (chunk) => data += chunk); process.stdin.on('end', () => resolve(data)); })); if (!Array.isArray(payload) || payload.length === 0) throw new Error('No vehicle type seed rows found'); console.log(payload[0].id);"
 )"
 
@@ -351,7 +335,7 @@ cat >"$manifest_path" <<EOF
   "dropletId": "local",
   "dropletIp": "127.0.0.1",
   "appUrl": "$app_url",
-  "postgrestUrl": "$postgrest_url",
+  "apiUrl": "$api_url",
   "phases": [
 EOF
 

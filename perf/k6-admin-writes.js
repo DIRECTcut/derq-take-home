@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter } from 'k6/metrics';
 
-const postgrestUrl = (__ENV.POSTGREST_URL || '').replace(/\/$/, '');
+const apiBaseUrl = (__ENV.API_BASE_URL || '').replace(/\/$/, '');
 const adminToken = __ENV.ADMIN_TOKEN || '';
 const countryId = Number(__ENV.COUNTRY_ID || '0');
 const vehicleTypeId = Number(__ENV.VEHICLE_TYPE_ID || '0');
@@ -21,8 +21,8 @@ const gatewayTimeoutResponses = new Counter('gateway_timeout_responses');
 const serverErrorResponses = new Counter('server_error_responses');
 const unexpectedStatusResponses = new Counter('unexpected_status_responses');
 
-if (!postgrestUrl) {
-  throw new Error('POSTGREST_URL is required');
+if (!apiBaseUrl) {
+  throw new Error('API_BASE_URL is required');
 }
 
 if (!adminToken) {
@@ -62,17 +62,15 @@ export const options = {
 export default function () {
   const timePeriod = baseTimePeriod + (__VU * vuTimePeriodStride) + __ITER;
   const response = http.post(
-    `${postgrestUrl}/traffic_metrics`,
-    JSON.stringify([
-      {
-        country_id: countryId,
-        vehicle_type_id: vehicleTypeId,
-        time_period: timePeriod,
-        observation_value: 100 + (__ITER % 50),
-        observation_flag: null,
-        confidentiality_status: 'public',
-      },
-    ]),
+    `${apiBaseUrl}/api/admin/traffic-metrics`,
+    JSON.stringify({
+      countryId,
+      vehicleTypeId,
+      timePeriod,
+      observationValue: 100 + (__ITER % 50),
+      observationFlag: null,
+      confidentialityStatus: 'public',
+    }),
     {
       headers: {
         Authorization: `Bearer ${adminToken}`,

@@ -5,10 +5,10 @@ import { Counter } from 'k6/metrics';
 const baseUrl = (__ENV.TARGET_BASE_URL || '').replace(/\/$/, '');
 const countryPath =
   __ENV.COUNTRY_PATH ||
-  '/country_traffic_latest?select=country_code,country_name,time_period,observation_value,vehicle_type_name&order=observation_value.desc';
+  '/api/dashboard/country-traffic';
 const vehiclePath =
   __ENV.VEHICLE_PATH ||
-  '/vehicle_type_distribution_latest?select=vehicle_type_slug,vehicle_type_name,unit,countries_reported,average_observation_value,total_observation_value';
+  '/api/dashboard/vehicle-distribution';
 const phaseName = __ENV.PHASE_NAME || 'unspecified';
 const targetRps = Number(__ENV.TARGET_RPS || '5');
 const duration = __ENV.DURATION || '30s';
@@ -51,7 +51,7 @@ export default function () {
   const path = __ITER % 2 === 0 ? countryPath : vehiclePath;
   const response = http.get(`${baseUrl}${path}`, {
     tags: {
-      endpoint: path.includes('country_traffic_latest') ? 'country' : 'vehicle',
+      endpoint: path.includes('country-traffic') ? 'country' : 'vehicle',
       phase: phaseName,
     },
   });
