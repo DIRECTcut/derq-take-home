@@ -120,37 +120,12 @@ The aggregate job fails when a size artifact is missing or teardown evidence is 
 - Local runs provide ballpark numbers for this machine and Docker setup.
   They are useful for comparing changes, but they are not directly comparable to the DigitalOcean CI matrix.
 
-### Latest pinned snapshot
+### Performance figures
 
-These numbers are pinned to commit `3db8511` (`Improve local performance harness and tuning`) and were measured locally on `2026-07-08` before the Fastify-only cutover.
+Commit `95cc898`
 
-- Reads, tuned capacity profile: about `901 RPS` at `read-rps-1000` (`p95 11.52ms`) and about `1374 RPS` at `read-rps-2000` (`p95 2266.71ms`), with `0` failures.
-- Writes, baseline capacity profile: about `467 RPS` at `write-rps-1000` and about `411 RPS` at `write-rps-2000`, with `504` pool timeouts and heavy dropped iterations.
-- Writes, tuned capacity profile: about `992 RPS` at `write-rps-1000` and about `1748-1999 RPS` at `write-rps-2000`, with `0` failures.
-- Main takeaway: the default PostgREST pool of `10` connections was the dominant local write bottleneck; raising the pool and local PostgreSQL limits removed the observed `504` saturation failures.
-
-### Current local ballpark
-
-Measured on `2026-07-08` after the Fastify-only cutover using `/tmp/perf-fastify-after` and the same `capacity` profile shape:
-
-- Tuned Fastify read capacity profile (`DATABASE_POOL_MAX=50`, `DATABASE_POOL_CONNECTION_TIMEOUT_MS=30000`, larger local PostgreSQL settings):
-  - `read-rps-1000`: achieved about `996.55 RPS`, `p95 21.17ms`, `0` failures, `64` dropped iterations
-  - `read-rps-2000`: achieved about `1296.59 RPS`, `p95 2088.85ms`, `0` failures, `5705` dropped iterations
-- Tuned Fastify write capacity profile (`DATABASE_POOL_MAX=50`, `DATABASE_POOL_CONNECTION_TIMEOUT_MS=30000`, larger local PostgreSQL settings):
-  - `write-rps-1000`: achieved about `906.93 RPS`, `p95 132.83ms`, `0` failures, `12` dropped iterations
-  - `write-rps-2000`: achieved about `1066.79 RPS`, `p95 660.53ms`, `0` failures, `3572` dropped iterations
-
-### Fastify cutover comparison
-
-Compared to the pinned `2026-07-08` PostgREST-backed baseline:
-
-- `read-rps-1000`: throughput improved from about `901 RPS` to about `996.55 RPS`, while `p95` latency rose from `11.52ms` to `21.17ms`
-- `read-rps-2000`: throughput fell from about `1374 RPS` to about `1296.59 RPS`, while `p95` latency improved from `2266.71ms` to `2088.85ms`
-- `write-rps-1000`: throughput fell from about `992 RPS` to about `906.93 RPS`, and `p95` latency rose from `42.34ms` to `132.83ms`
-- `write-rps-2000`: throughput fell from the prior tuned `1748-1999 RPS` range to about `1066.79 RPS`, but the run still completed with `0` failures and without the old `504` pool-saturation signature
-
-The cutover preserved correctness and removed the external PostgREST service, but it regressed the high-end write envelope and slightly softened the `2000 RPS` read ceiling.
-If higher local throughput matters, the next tuning work should focus on the Fastify-side DB pool and the Node request path rather than on the removed PostgREST gateway.
+- Reads, tuned capacity profile: about `1000 RPS` at `read-rps-1000` (`p95 5.96ms`) and about `1995 RPS` at `read-rps-2000` (`p95 23.93ms`), with `0` failures.
+- Writes, tuned capacity profile: about `908 RPS` at `write-rps-1000` (`p95 10.47ms`) and about `1803 RPS` at `write-rps-2000` (`p95 69.63ms`), with `0` failures.
 
 ## Deployment handoff
 
