@@ -118,6 +118,15 @@ The aggregate job fails when a size artifact is missing or teardown evidence is 
 - Local runs provide ballpark numbers for this machine and Docker setup.
   They are useful for comparing changes, but they are not directly comparable to the DigitalOcean CI matrix.
 
+### Latest pinned snapshot
+
+These numbers are pinned to commit `3db8511` (`Improve local performance harness and tuning`) and were measured locally on `2026-07-08`.
+
+- Reads, tuned capacity profile: about `901 RPS` at `read-rps-1000` (`p95 11.52ms`) and about `1374 RPS` at `read-rps-2000` (`p95 2266.71ms`), with `0` failures.
+- Writes, baseline capacity profile: about `467 RPS` at `write-rps-1000` and about `411 RPS` at `write-rps-2000`, with `504` pool timeouts and heavy dropped iterations.
+- Writes, tuned capacity profile: about `992 RPS` at `write-rps-1000` and about `1748-1999 RPS` at `write-rps-2000`, with `0` failures.
+- Main takeaway: the default PostgREST pool of `10` connections was the dominant local write bottleneck; raising the pool and local PostgreSQL limits removed the observed `504` saturation failures.
+
 ### Current local ballpark
 
 Measured on `2026-07-08` with the updated harness:
