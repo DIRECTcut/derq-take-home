@@ -51,9 +51,3 @@ select
 from latest_metric_per_country
 where row_number = 1
 group by vehicle_type_slug, vehicle_type_name, unit;
-
-grant select on api.country_traffic_latest to web_anon, traffic_admin;
-grant select on api.vehicle_type_distribution_latest to web_anon, traffic_admin;
-grant select, insert, update, delete on api.countries to traffic_admin;
-grant select, insert, update, delete on api.vehicle_types to traffic_admin;
-grant select, insert, update, delete on api.traffic_metrics to traffic_admin;

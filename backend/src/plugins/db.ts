@@ -10,6 +10,8 @@ type DbPluginOptions = {
 async function dbPlugin(app: FastifyInstance, options: DbPluginOptions): Promise<void> {
   const pool = new Pool({
     connectionString: options.config.databaseUrl,
+    connectionTimeoutMillis: options.config.databasePoolConnectionTimeoutMs,
+    max: options.config.databasePoolMax,
   });
 
   app.decorate('db', pool);

@@ -1,9 +1,9 @@
 import { ensureDatabaseInitialized } from '../helpers/bootstrapDatabase.js';
-import { postgrestFetch } from '../helpers/postgrest.js';
+import { createTestApp } from '../helpers/testApp.js';
 import { resetDatabase } from '../helpers/resetDatabase.js';
 import { seedFullDataset } from '../helpers/seedScenario.js';
 
-describe('postgrest read api', () => {
+describe('fastify read api', () => {
   beforeAll(async () => {
     await ensureDatabaseInitialized();
   });
@@ -14,34 +14,52 @@ describe('postgrest read api', () => {
   });
 
   it('returns seeded chart data from the latest country view', async () => {
-    const response = await postgrestFetch('/country_traffic_latest?country_code=eq.AL&select=country_code,time_period,observation_value');
+    const app = await createTestApp();
 
-    expect(response.status).toBe(200);
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/dashboard/country-traffic',
+      });
 
-    const body = (await response.json()) as Array<{
-      country_code: string;
-      time_period: number;
-      observation_value: number;
-    }>;
+      expect(response.statusCode).toBe(200);
 
-    expect(body[0]).toMatchObject({
-      country_code: 'AL',
-      time_period: 2024,
-      observation_value: 328,
-    });
+      const body = response.json<Array<{
+        country_code: string;
+        time_period: number;
+        observation_value: number;
+      }>>();
+
+      expect(body.find((row) => row.country_code === 'AL')).toMatchObject({
+        country_code: 'AL',
+        time_period: 2024,
+        observation_value: 328,
+      });
+    } finally {
+      await app.close();
+    }
   });
 
   it('returns distribution data from the vehicle type summary view', async () => {
-    const response = await postgrestFetch('/vehicle_type_distribution_latest?select=vehicle_type_slug,countries_reported');
+    const app = await createTestApp();
 
-    expect(response.status).toBe(200);
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/dashboard/vehicle-distribution',
+      });
 
-    const body = (await response.json()) as Array<{
-      vehicle_type_slug: string;
-      countries_reported: number;
-    }>;
+      expect(response.statusCode).toBe(200);
 
-    expect(body[0].vehicle_type_slug).toBe('passenger-cars-per-thousand-inhabitants');
-    expect(body[0].countries_reported).toBeGreaterThan(1);
+      const body = response.json<Array<{
+        vehicle_type_slug: string;
+        countries_reported: number;
+      }>>();
+
+      expect(body[0].vehicle_type_slug).toBe('passenger-cars-per-thousand-inhabitants');
+      expect(body[0].countries_reported).toBeGreaterThan(1);
+    } finally {
+      await app.close();
+    }
   });
 });

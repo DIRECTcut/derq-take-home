@@ -1,23 +1,26 @@
 do $$
 begin
-  if not exists (select 1 from pg_roles where rolname = 'web_anon') then
-    create role web_anon nologin;
+  if exists (select 1 from pg_roles where rolname = 'authenticator') then
+    revoke web_anon from authenticator;
+    revoke traffic_admin from authenticator;
   end if;
 
-  if not exists (select 1 from pg_roles where rolname = 'traffic_admin') then
-    create role traffic_admin nologin;
+  if exists (select 1 from pg_roles where rolname = 'web_anon') then
+    revoke usage on schema api from web_anon;
+    revoke all privileges on all tables in schema api from web_anon;
+    revoke all privileges on all sequences in schema api from web_anon;
+    drop role web_anon;
   end if;
 
-  if not exists (select 1 from pg_roles where rolname = 'authenticator') then
-    create role authenticator login password 'localdev_authenticator_password';
-  else
-    alter role authenticator with login password 'localdev_authenticator_password';
+  if exists (select 1 from pg_roles where rolname = 'traffic_admin') then
+    revoke usage on schema api from traffic_admin;
+    revoke all privileges on all tables in schema api from traffic_admin;
+    revoke all privileges on all sequences in schema api from traffic_admin;
+    drop role traffic_admin;
+  end if;
+
+  if exists (select 1 from pg_roles where rolname = 'authenticator') then
+    drop role authenticator;
   end if;
 end
 $$;
-
-grant web_anon to authenticator;
-grant traffic_admin to authenticator;
-
-grant usage on schema api to web_anon, traffic_admin;
-grant select on all sequences in schema api to traffic_admin;

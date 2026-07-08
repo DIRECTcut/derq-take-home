@@ -4,7 +4,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     db: Pool;
     frontendAssetsAvailable: boolean;
-    postgrestBaseUrl: string;
   }
 }
 

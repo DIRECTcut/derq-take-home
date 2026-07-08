@@ -1,4 +1,5 @@
 import { runMigrations } from '../../src/lib/db/runMigrations.js';
+import { testConfig } from './testConfig.js';
 
 let initialized = false;
 
@@ -7,6 +8,6 @@ export async function ensureDatabaseInitialized(): Promise<void> {
     return;
   }
 
-  await runMigrations();
+  await runMigrations(testConfig());
   initialized = true;
 }

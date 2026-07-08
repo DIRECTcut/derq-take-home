@@ -9,9 +9,8 @@ export async function registerHealthRoutes(app: FastifyInstance): Promise<void> 
     await app.db.query('select 1');
 
     return {
-      status: 'ok',
       database: 'ready',
-      postgrestBaseUrl: app.postgrestBaseUrl,
+      status: 'ok',
     };
   });
 }

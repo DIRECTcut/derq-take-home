@@ -40,8 +40,8 @@ describe('admin login', () => {
       expect(body.expiresInSeconds).toBe(3600);
       expect(new Date(body.expiresAt).toString()).not.toBe('Invalid Date');
 
-      const decoded = jwt.verify(body.token, config.postgrestJwtSecret) as { role: string };
-      expect(decoded.role).toBe(config.postgrestAdminRole);
+      const decoded = jwt.verify(body.token, config.adminJwtSecret) as { scope: string };
+      expect(decoded.scope).toBe('traffic-data-admin');
     } finally {
       await app.close();
     }
@@ -74,16 +74,16 @@ describe('admin login', () => {
     expect(() =>
       buildConfig({
         ADMIN_PASSWORD: '',
+        ADMIN_JWT_SECRET: 'super-secret-admin-key-for-local-dev-32',
         DATABASE_URL: 'postgres://postgres:postgres@localhost:55432/traffic_data',
-        POSTGREST_JWT_SECRET: 'super-secret-admin-key-for-local-dev-32',
       }),
     ).toThrowError('ADMIN_USERNAME is required');
 
     expect(() =>
       buildConfig({
+        ADMIN_JWT_SECRET: 'super-secret-admin-key-for-local-dev-32',
         ADMIN_USERNAME: 'admin',
         DATABASE_URL: 'postgres://postgres:postgres@localhost:55432/traffic_data',
-        POSTGREST_JWT_SECRET: 'super-secret-admin-key-for-local-dev-32',
       }),
     ).toThrowError('ADMIN_PASSWORD is required');
   });

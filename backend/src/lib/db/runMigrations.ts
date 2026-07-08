@@ -1,12 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Pool } from 'pg';
-import { buildConfig } from '../../config/env.js';
+import { buildConfig, type AppConfig } from '../../config/env.js';
 import { repoRoot } from '../paths.js';
 import { runSqlFile } from './runSqlFile.js';
 
-export async function runMigrations(): Promise<void> {
-  const config = buildConfig();
+export async function runMigrations(configOverrides?: AppConfig): Promise<void> {
+  const config = configOverrides ?? buildConfig();
   const pool = new Pool({
     connectionString: config.databaseUrl,
   });
