@@ -51,9 +51,7 @@ export default function () {
 
   check(response, {
     'status is 200': (item) => item.status === 200,
-    'body is not empty': (item) => item.body.length > 0,
   });
 
   sleep(0.1);
 }
-

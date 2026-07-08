@@ -7,3 +7,4 @@ deploy/.env
 deploy/prod/.env
 artifacts/
 docs/
+perf-local

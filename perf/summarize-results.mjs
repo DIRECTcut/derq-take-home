@@ -34,6 +34,14 @@ function round(value) {
   return Number(value.toFixed(2));
 }
 
+function metricValues(metric) {
+  if (!metric || typeof metric !== 'object') {
+    return {};
+  }
+
+  return metric.values ?? metric;
+}
+
 function parsePhase(phase) {
   if (!fs.existsSync(phase.summaryPath)) {
     return {
@@ -64,19 +72,19 @@ function parsePhase(phase) {
   }
 
   const summary = readJson(phase.summaryPath);
-  const durationMetric = summary.metrics?.http_req_duration?.values ?? {};
-  const failedMetric = summary.metrics?.http_req_failed?.values ?? {};
-  const requestMetric = summary.metrics?.http_reqs?.values ?? {};
-  const checkMetric = summary.metrics?.checks?.values ?? {};
+  const durationMetric = metricValues(summary.metrics?.http_req_duration);
+  const failedMetric = metricValues(summary.metrics?.http_req_failed);
+  const requestMetric = metricValues(summary.metrics?.http_reqs);
+  const checkMetric = metricValues(summary.metrics?.checks);
   const metadata = fs.existsSync(path.join(phase.metricsDir, 'metadata.json'))
     ? readJson(path.join(phase.metricsDir, 'metadata.json'))
     : null;
 
   const p95 = Number(durationMetric['p(95)'] ?? Number.NaN);
   const avg = Number(durationMetric.avg ?? Number.NaN);
-  const failureRate = Number(failedMetric.rate ?? 0);
+  const failureRate = Number(failedMetric.rate ?? failedMetric.value ?? 0);
   const achievedRps = Number(requestMetric.rate ?? Number.NaN);
-  const checksRate = Number(checkMetric.rate ?? Number.NaN);
+  const checksRate = Number(checkMetric.rate ?? checkMetric.value ?? Number.NaN);
 
   return {
     name: phase.name,

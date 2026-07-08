@@ -90,6 +90,17 @@ Each matrix leg publishes:
 
 The aggregate job fails when a size artifact is missing or teardown evidence is incomplete, even if one or more benchmark phases produced latency data.
 
+## Local performance checks
+
+- `perf/run-local.sh` runs local Docker Compose benchmarks against the same PostgREST read path that CI exercises, plus an admin-authenticated PostgREST write path.
+- The script starts the local stack, applies migrations, reseeds the dataset, runs `k6` phases, and writes artifacts under `perf-local/<timestamp>/`.
+- Usage:
+  - `bash perf/run-local.sh reads`
+  - `bash perf/run-local.sh writes`
+  - `bash perf/run-local.sh all`
+- Local runs provide ballpark numbers for this machine and Docker setup.
+  They are useful for comparing changes, but they are not directly comparable to the DigitalOcean CI matrix.
+
 ## Deployment handoff
 
 Repo-local VPS deployment lives in [`deploy/`](deploy/README.md).
