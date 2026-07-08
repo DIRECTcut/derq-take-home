@@ -42,6 +42,11 @@ function metricValues(metric) {
   return metric.values ?? metric;
 }
 
+function metricNumber(summary, metricName, key, fallback = Number.NaN) {
+  const metric = metricValues(summary.metrics?.[metricName]);
+  return Number(metric[key] ?? fallback);
+}
+
 function parsePhase(phase) {
   if (!fs.existsSync(phase.summaryPath)) {
     return {
@@ -58,6 +63,12 @@ function parsePhase(phase) {
         failureRate: null,
         achievedRps: null,
         checksRate: null,
+        droppedIterations: null,
+        successfulResponses: null,
+        conflictResponses: null,
+        gatewayTimeoutResponses: null,
+        serverErrorResponses: null,
+        unexpectedStatusResponses: null,
       },
       health: {
         metricsCaptured: false,
@@ -72,19 +83,21 @@ function parsePhase(phase) {
   }
 
   const summary = readJson(phase.summaryPath);
-  const durationMetric = metricValues(summary.metrics?.http_req_duration);
-  const failedMetric = metricValues(summary.metrics?.http_req_failed);
-  const requestMetric = metricValues(summary.metrics?.http_reqs);
-  const checkMetric = metricValues(summary.metrics?.checks);
   const metadata = fs.existsSync(path.join(phase.metricsDir, 'metadata.json'))
     ? readJson(path.join(phase.metricsDir, 'metadata.json'))
     : null;
 
-  const p95 = Number(durationMetric['p(95)'] ?? Number.NaN);
-  const avg = Number(durationMetric.avg ?? Number.NaN);
-  const failureRate = Number(failedMetric.rate ?? failedMetric.value ?? 0);
-  const achievedRps = Number(requestMetric.rate ?? Number.NaN);
-  const checksRate = Number(checkMetric.rate ?? checkMetric.value ?? Number.NaN);
+  const p95 = metricNumber(summary, 'http_req_duration', 'p(95)');
+  const avg = metricNumber(summary, 'http_req_duration', 'avg');
+  const failureRate = metricNumber(summary, 'http_req_failed', 'rate', metricNumber(summary, 'http_req_failed', 'value', 0));
+  const achievedRps = metricNumber(summary, 'http_reqs', 'rate');
+  const checksRate = metricNumber(summary, 'checks', 'rate', metricNumber(summary, 'checks', 'value'));
+  const droppedIterations = metricNumber(summary, 'dropped_iterations', 'count', 0);
+  const successfulResponses = metricNumber(summary, 'successful_responses', 'count', 0);
+  const conflictResponses = metricNumber(summary, 'conflict_responses', 'count', 0);
+  const gatewayTimeoutResponses = metricNumber(summary, 'gateway_timeout_responses', 'count', 0);
+  const serverErrorResponses = metricNumber(summary, 'server_error_responses', 'count', 0);
+  const unexpectedStatusResponses = metricNumber(summary, 'unexpected_status_responses', 'count', 0);
 
   return {
     name: phase.name,
@@ -100,6 +113,12 @@ function parsePhase(phase) {
       failureRate: round(failureRate),
       achievedRps: round(achievedRps),
       checksRate: round(checksRate),
+      droppedIterations: round(droppedIterations),
+      successfulResponses: round(successfulResponses),
+      conflictResponses: round(conflictResponses),
+      gatewayTimeoutResponses: round(gatewayTimeoutResponses),
+      serverErrorResponses: round(serverErrorResponses),
+      unexpectedStatusResponses: round(unexpectedStatusResponses),
     },
     health: {
       metricsCaptured: fs.existsSync(path.join(phase.metricsDir, 'metadata.json')),

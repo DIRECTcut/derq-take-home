@@ -3,13 +3,23 @@
 set -euo pipefail
 
 phase_set="${1:-all}"
-artifact_root="${2:-$PWD/perf-local/$(date -u +%Y%m%dT%H%M%SZ)}"
+profile="${2:-standard}"
+artifact_root="${3:-$PWD/perf-local/$(date -u +%Y%m%dT%H%M%SZ)}"
 
 case "$phase_set" in
   all|reads|writes)
     ;;
   *)
-    echo "Usage: $0 [all|reads|writes] [artifact-dir]" >&2
+    echo "Usage: $0 [all|reads|writes] [standard|capacity] [artifact-dir]" >&2
+    exit 1
+    ;;
+esac
+
+case "$profile" in
+  standard|capacity)
+    ;;
+  *)
+    echo "Usage: $0 [all|reads|writes] [standard|capacity] [artifact-dir]" >&2
     exit 1
     ;;
 esac
@@ -34,6 +44,52 @@ export POSTGREST_JWT_SECRET="${POSTGREST_JWT_SECRET:-super-secret-admin-key-for-
 export POSTGREST_ANON_ROLE="${POSTGREST_ANON_ROLE:-web_anon}"
 export POSTGREST_ADMIN_ROLE="${POSTGREST_ADMIN_ROLE:-traffic_admin}"
 export FRONTEND_DIST_DIR="${FRONTEND_DIST_DIR:-/app/frontend/dist}"
+
+if [ "$profile" = "capacity" ]; then
+  think_time_seconds="${THINK_TIME_SECONDS:-0}"
+  : "${PGRST_DB_POOL:=50}"
+  : "${PGRST_DB_POOL_ACQUISITION_TIMEOUT:=30}"
+  : "${PGRST_DB_POOL_MAX_LIFETIME:=1800}"
+  : "${PGRST_DB_POOL_MAX_IDLETIME:=60}"
+  : "${PGRST_LOG_LEVEL:=warn}"
+  : "${PGRST_SERVER_TIMING_ENABLED:=true}"
+  : "${PG_MAX_CONNECTIONS:=200}"
+  : "${PG_SHARED_BUFFERS:=256MB}"
+  : "${PG_WORK_MEM:=8MB}"
+  : "${PG_MAINTENANCE_WORK_MEM:=128MB}"
+  : "${PG_EFFECTIVE_CACHE_SIZE:=768MB}"
+  : "${PG_CHECKPOINT_COMPLETION_TARGET:=0.9}"
+  : "${PG_WAL_BUFFERS:=16MB}"
+else
+  think_time_seconds="${THINK_TIME_SECONDS:-0.1}"
+  : "${PGRST_DB_POOL:=10}"
+  : "${PGRST_DB_POOL_ACQUISITION_TIMEOUT:=10}"
+  : "${PGRST_DB_POOL_MAX_LIFETIME:=1800}"
+  : "${PGRST_DB_POOL_MAX_IDLETIME:=30}"
+  : "${PGRST_LOG_LEVEL:=error}"
+  : "${PGRST_SERVER_TIMING_ENABLED:=false}"
+  : "${PG_MAX_CONNECTIONS:=100}"
+  : "${PG_SHARED_BUFFERS:=128MB}"
+  : "${PG_WORK_MEM:=4MB}"
+  : "${PG_MAINTENANCE_WORK_MEM:=64MB}"
+  : "${PG_EFFECTIVE_CACHE_SIZE:=512MB}"
+  : "${PG_CHECKPOINT_COMPLETION_TARGET:=0.9}"
+  : "${PG_WAL_BUFFERS:=4MB}"
+fi
+
+export PGRST_DB_POOL
+export PGRST_DB_POOL_ACQUISITION_TIMEOUT
+export PGRST_DB_POOL_MAX_LIFETIME
+export PGRST_DB_POOL_MAX_IDLETIME
+export PGRST_LOG_LEVEL
+export PGRST_SERVER_TIMING_ENABLED
+export PG_MAX_CONNECTIONS
+export PG_SHARED_BUFFERS
+export PG_WORK_MEM
+export PG_MAINTENANCE_WORK_MEM
+export PG_EFFECTIVE_CACHE_SIZE
+export PG_CHECKPOINT_COMPLETION_TARGET
+export PG_WAL_BUFFERS
 
 app_url="${APP_URL:-http://localhost:3000}"
 postgrest_url="${POSTGREST_URL:-http://localhost:3001}"
@@ -67,7 +123,12 @@ containerize_url() {
 
 capture_local_metrics() {
   local output_dir="$1"
+  local postgrest_container_id
+  local postgres_container_id
+
   mkdir -p "$output_dir"
+  postgrest_container_id="$(docker compose ps -q postgrest 2>/dev/null || true)"
+  postgres_container_id="$(docker compose ps -q postgres 2>/dev/null || true)"
 
   if ! docker compose ps >"$output_dir/docker-compose-ps.txt" 2>&1; then
     printf 'command_failed\n' >>"$output_dir/docker-compose-ps.txt"
@@ -75,6 +136,22 @@ capture_local_metrics() {
 
   if ! docker stats --no-stream >"$output_dir/docker-stats.txt" 2>&1; then
     printf 'command_failed\n' >>"$output_dir/docker-stats.txt"
+  fi
+
+  if [ -n "$postgrest_container_id" ]; then
+    if ! docker logs --since 10m "$postgrest_container_id" >"$output_dir/postgrest.log" 2>&1; then
+      printf 'command_failed\n' >>"$output_dir/postgrest.log"
+    fi
+  else
+    printf 'container_not_found\n' >"$output_dir/postgrest.log"
+  fi
+
+  if [ -n "$postgres_container_id" ]; then
+    if ! docker logs --since 10m "$postgres_container_id" >"$output_dir/postgres.log" 2>&1; then
+      printf 'command_failed\n' >>"$output_dir/postgres.log"
+    fi
+  else
+    printf 'container_not_found\n' >"$output_dir/postgres.log"
   fi
 
   if ! docker compose exec -T postgres psql -U postgres -d traffic_data -c \
@@ -94,9 +171,34 @@ capture_local_metrics() {
   "appUrl": "$app_url",
   "postgrestUrl": "$postgrest_url",
   "phaseSet": "$phase_set",
+  "profile": "$profile",
+  "thinkTimeSeconds": "$think_time_seconds",
+  "postgrestDbPool": "$PGRST_DB_POOL",
+  "postgrestDbPoolAcquisitionTimeout": "$PGRST_DB_POOL_ACQUISITION_TIMEOUT",
+  "postgrestDbPoolMaxLifetime": "$PGRST_DB_POOL_MAX_LIFETIME",
+  "postgrestDbPoolMaxIdleTime": "$PGRST_DB_POOL_MAX_IDLETIME",
+  "postgrestLogLevel": "$PGRST_LOG_LEVEL",
+  "postgrestServerTimingEnabled": "$PGRST_SERVER_TIMING_ENABLED",
+  "pgMaxConnections": "$PG_MAX_CONNECTIONS",
+  "pgSharedBuffers": "$PG_SHARED_BUFFERS",
+  "pgWorkMem": "$PG_WORK_MEM",
+  "pgMaintenanceWorkMem": "$PG_MAINTENANCE_WORK_MEM",
+  "pgEffectiveCacheSize": "$PG_EFFECTIVE_CACHE_SIZE",
+  "pgCheckpointCompletionTarget": "$PG_CHECKPOINT_COMPLETION_TARGET",
+  "pgWalBuffers": "$PG_WAL_BUFFERS",
   "mode": "local"
 }
 EOF
+}
+
+phase_specs=()
+
+record_phase() {
+  local phase_name="$1"
+  local target_rps="$2"
+  local duration="$3"
+  local max_p95="$4"
+  phase_specs+=("${phase_name}|${target_rps}|${duration}|${max_p95}")
 }
 
 run_phase() {
@@ -107,8 +209,9 @@ run_phase() {
   local max_p95="$5"
   local phase_dir="$artifact_root/$phase_name"
   local summary_path="$phase_dir/summary.json"
-  local summary_path_container="/work/${summary_path#"$repo_root"/}"
+  local summary_path_container="/results/$phase_name/summary.json"
   local base_time_period=300000
+  local vu_time_period_stride=20000
 
   mkdir -p "$phase_dir/metrics"
 
@@ -122,13 +225,19 @@ run_phase() {
   if [ "$scenario" = "write" ]; then
     case "$phase_name" in
       write-rps-5)
-        base_time_period=300000
+        base_time_period=100000000
         ;;
       write-rps-50)
-        base_time_period=400000
+        base_time_period=500000000
         ;;
       write-rps-500)
-        base_time_period=500000
+        base_time_period=900000000
+        ;;
+      write-rps-1000)
+        base_time_period=1300000000
+        ;;
+      write-rps-2000)
+        base_time_period=1700000000
         ;;
     esac
 
@@ -139,6 +248,7 @@ run_phase() {
       -e COUNTRY_ID="$country_id"
       -e VEHICLE_TYPE_ID="$vehicle_type_id"
       -e BASE_TIME_PERIOD="$base_time_period"
+      -e VU_TIME_PERIOD_STRIDE="$vu_time_period_stride"
     )
   fi
 
@@ -147,6 +257,7 @@ run_phase() {
     --add-host host.docker.internal:host-gateway \
     --user "$(id -u):$(id -g)" \
     -v "$repo_root:/work" \
+    -v "$artifact_root:/results" \
     -w /work \
     grafana/k6 run \
     --summary-export "$summary_path_container" \
@@ -156,6 +267,7 @@ run_phase() {
     -e DURATION="$duration" \
     -e MAX_P95_MS="$max_p95" \
     -e MAX_FAILURE_RATE="0.01" \
+    -e THINK_TIME_SECONDS="$think_time_seconds" \
     "$script_path"
   local phase_status="$?"
   set -e
@@ -173,7 +285,7 @@ country_id=""
 vehicle_type_id=""
 
 cd "$repo_root"
-docker compose up -d postgres postgrest api
+docker compose up -d --force-recreate postgres postgrest api
 wait_for_url "$app_url/health/ready" "api health"
 wait_for_url "$postgrest_url/country_traffic_latest?select=country_code&limit=1" "postgrest read path"
 
@@ -200,15 +312,35 @@ vehicle_type_id="$(
 )"
 
 if [ "$phase_set" = "all" ] || [ "$phase_set" = "reads" ]; then
-  run_phase "read" "read-rps-5" 5 "20s" 800
-  run_phase "read" "read-rps-50" 50 "30s" 1200
-  run_phase "read" "read-rps-500" 500 "45s" 2500
+  if [ "$profile" = "capacity" ]; then
+    record_phase "read-rps-1000" 1000 "20s" 2500
+    record_phase "read-rps-2000" 2000 "20s" 5000
+    run_phase "read" "read-rps-1000" 1000 "20s" 2500
+    run_phase "read" "read-rps-2000" 2000 "20s" 5000
+  else
+    record_phase "read-rps-5" 5 "20s" 800
+    record_phase "read-rps-50" 50 "30s" 1200
+    record_phase "read-rps-500" 500 "45s" 2500
+    run_phase "read" "read-rps-5" 5 "20s" 800
+    run_phase "read" "read-rps-50" 50 "30s" 1200
+    run_phase "read" "read-rps-500" 500 "45s" 2500
+  fi
 fi
 
 if [ "$phase_set" = "all" ] || [ "$phase_set" = "writes" ]; then
-  run_phase "write" "write-rps-5" 5 "20s" 800
-  run_phase "write" "write-rps-50" 50 "30s" 1200
-  run_phase "write" "write-rps-500" 500 "45s" 2500
+  if [ "$profile" = "capacity" ]; then
+    record_phase "write-rps-1000" 1000 "20s" 2500
+    record_phase "write-rps-2000" 2000 "20s" 5000
+    run_phase "write" "write-rps-1000" 1000 "20s" 2500
+    run_phase "write" "write-rps-2000" 2000 "20s" 5000
+  else
+    record_phase "write-rps-5" 5 "20s" 800
+    record_phase "write-rps-50" 50 "30s" 1200
+    record_phase "write-rps-500" 500 "45s" 2500
+    run_phase "write" "write-rps-5" 5 "20s" 800
+    run_phase "write" "write-rps-50" 50 "30s" 1200
+    run_phase "write" "write-rps-500" 500 "45s" 2500
+  fi
 fi
 
 manifest_path="$artifact_root/manifest.json"
@@ -224,43 +356,8 @@ cat >"$manifest_path" <<EOF
 EOF
 
 phase_count=0
-for phase_dir in "$artifact_root"/*/; do
-  phase_name="$(basename "$phase_dir")"
-  case "$phase_name" in
-    read-rps-5)
-      target_rps=5
-      duration="20s"
-      max_p95=800
-      ;;
-    read-rps-50)
-      target_rps=50
-      duration="30s"
-      max_p95=1200
-      ;;
-    read-rps-500)
-      target_rps=500
-      duration="45s"
-      max_p95=2500
-      ;;
-    write-rps-5)
-      target_rps=5
-      duration="20s"
-      max_p95=800
-      ;;
-    write-rps-50)
-      target_rps=50
-      duration="30s"
-      max_p95=1200
-      ;;
-    write-rps-500)
-      target_rps=500
-      duration="45s"
-      max_p95=2500
-      ;;
-    *)
-      continue
-      ;;
-  esac
+for phase_spec in "${phase_specs[@]}"; do
+  IFS='|' read -r phase_name target_rps duration max_p95 <<<"$phase_spec"
 
   if [ "$phase_count" -gt 0 ]; then
     printf ',\n' >>"$manifest_path"

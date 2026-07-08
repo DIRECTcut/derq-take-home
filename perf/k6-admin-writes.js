@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { Counter } from 'k6/metrics';
 
 const postgrestUrl = (__ENV.POSTGREST_URL || '').replace(/\/$/, '');
 const adminToken = __ENV.ADMIN_TOKEN || '';
@@ -11,6 +12,14 @@ const duration = __ENV.DURATION || '30s';
 const maxP95Ms = Number(__ENV.MAX_P95_MS || '1000');
 const maxFailureRate = Number(__ENV.MAX_FAILURE_RATE || '0.01');
 const baseTimePeriod = Number(__ENV.BASE_TIME_PERIOD || '300000');
+const vuTimePeriodStride = Number(__ENV.VU_TIME_PERIOD_STRIDE || '20000');
+const thinkTimeSeconds = Number(__ENV.THINK_TIME_SECONDS || '0.1');
+
+const successfulResponses = new Counter('successful_responses');
+const conflictResponses = new Counter('conflict_responses');
+const gatewayTimeoutResponses = new Counter('gateway_timeout_responses');
+const serverErrorResponses = new Counter('server_error_responses');
+const unexpectedStatusResponses = new Counter('unexpected_status_responses');
 
 if (!postgrestUrl) {
   throw new Error('POSTGREST_URL is required');
@@ -51,7 +60,7 @@ export const options = {
 };
 
 export default function () {
-  const timePeriod = baseTimePeriod + (__VU * 100000) + __ITER;
+  const timePeriod = baseTimePeriod + (__VU * vuTimePeriodStride) + __ITER;
   const response = http.post(
     `${postgrestUrl}/traffic_metrics`,
     JSON.stringify([
@@ -80,5 +89,19 @@ export default function () {
     'status is 201': (item) => item.status === 201,
   });
 
-  sleep(0.1);
+  if (response.status === 201) {
+    successfulResponses.add(1);
+  } else if (response.status === 409) {
+    conflictResponses.add(1);
+  } else if (response.status === 504) {
+    gatewayTimeoutResponses.add(1);
+  } else if (response.status >= 500) {
+    serverErrorResponses.add(1);
+  } else {
+    unexpectedStatusResponses.add(1);
+  }
+
+  if (thinkTimeSeconds > 0) {
+    sleep(thinkTimeSeconds);
+  }
 }

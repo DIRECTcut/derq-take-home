@@ -29,6 +29,36 @@ function makeSummary(overrides = {}) {
           rate: 1,
         },
       },
+      dropped_iterations: {
+        values: {
+          count: 0,
+        },
+      },
+      successful_responses: {
+        values: {
+          count: 1494,
+        },
+      },
+      conflict_responses: {
+        values: {
+          count: 0,
+        },
+      },
+      gateway_timeout_responses: {
+        values: {
+          count: 0,
+        },
+      },
+      server_error_responses: {
+        values: {
+          count: 0,
+        },
+      },
+      unexpected_status_responses: {
+        values: {
+          count: 0,
+        },
+      },
     },
     ...overrides,
   };
@@ -80,6 +110,8 @@ test('summarize-results emits one result per leg with phase pass state', () => {
   assert.equal(output.size, 's-1vcpu-2gb');
   assert.equal(output.overallPassed, true);
   assert.equal(output.phases[0].metrics.p95Ms, 320);
+  assert.equal(output.phases[0].metrics.successfulResponses, 1494);
+  assert.equal(output.phases[0].metrics.droppedIterations, 0);
 });
 
 test('summarize-results marks a phase failed when latency breaches the threshold', () => {
@@ -148,6 +180,12 @@ test('summarize-results supports flat k6 metric objects without nested values', 
         http_req_failed: { value: 0.02 },
         http_reqs: { rate: 48.6 },
         checks: { value: 0.98 },
+        dropped_iterations: { count: 12 },
+        successful_responses: { count: 1458 },
+        conflict_responses: { count: 3 },
+        gateway_timeout_responses: { count: 8 },
+        server_error_responses: { count: 11 },
+        unexpected_status_responses: { count: 2 },
       },
     }),
   );
@@ -185,4 +223,10 @@ test('summarize-results supports flat k6 metric objects without nested values', 
   assert.equal(output.phases[0].metrics.failureRate, 0.02);
   assert.equal(output.phases[0].metrics.achievedRps, 48.6);
   assert.equal(output.phases[0].metrics.checksRate, 0.98);
+  assert.equal(output.phases[0].metrics.droppedIterations, 12);
+  assert.equal(output.phases[0].metrics.successfulResponses, 1458);
+  assert.equal(output.phases[0].metrics.conflictResponses, 3);
+  assert.equal(output.phases[0].metrics.gatewayTimeoutResponses, 8);
+  assert.equal(output.phases[0].metrics.serverErrorResponses, 11);
+  assert.equal(output.phases[0].metrics.unexpectedStatusResponses, 2);
 });

@@ -95,11 +95,45 @@ The aggregate job fails when a size artifact is missing or teardown evidence is 
 - `perf/run-local.sh` runs local Docker Compose benchmarks against the same PostgREST read path that CI exercises, plus an admin-authenticated PostgREST write path.
 - The script starts the local stack, applies migrations, reseeds the dataset, runs `k6` phases, and writes artifacts under `perf-local/<timestamp>/`.
 - Usage:
-  - `bash perf/run-local.sh reads`
-  - `bash perf/run-local.sh writes`
-  - `bash perf/run-local.sh all`
+  - `bash perf/run-local.sh reads standard`
+  - `bash perf/run-local.sh writes standard`
+  - `bash perf/run-local.sh all capacity`
+  - `bash perf/run-local.sh writes capacity /tmp/perf-writes-capacity`
+- Profiles:
+  - `standard`: includes light think time and the original 5/50/500 RPS ballpark phases.
+  - `capacity`: removes think time, applies larger local PostgREST/PostgreSQL settings by default, and runs the 1000/2000 RPS capacity phases.
+- Useful tuning env vars:
+  - `PGRST_DB_POOL`
+  - `PGRST_DB_POOL_ACQUISITION_TIMEOUT`
+  - `PG_MAX_CONNECTIONS`
+  - `PG_SHARED_BUFFERS`
+  - `PG_WORK_MEM`
+  - `PG_MAINTENANCE_WORK_MEM`
+  - `PG_EFFECTIVE_CACHE_SIZE`
+- Artifacts now include:
+  - per-phase `summary.json`
+  - parsed `result.json`
+  - `docker stats`, `pg_stat_activity`, PostgREST logs, and PostgreSQL logs
+  - status-class counters for `409`, `504`, other `5xx`, dropped iterations, and successful responses
 - Local runs provide ballpark numbers for this machine and Docker setup.
   They are useful for comparing changes, but they are not directly comparable to the DigitalOcean CI matrix.
+
+### Current local ballpark
+
+Measured on `2026-07-08` with the updated harness:
+
+- Tuned read capacity profile (`PGRST_DB_POOL=50`, larger local PostgreSQL settings):
+  - `read-rps-1000`: achieved about `901 RPS`, `p95 11.52ms`, `0` failures
+  - `read-rps-2000`: achieved about `1374 RPS`, `p95 2266.71ms`, `0` failures
+- Baseline write capacity profile (`PGRST_DB_POOL=10`, smaller PostgreSQL settings):
+  - `write-rps-1000`: achieved about `467 RPS`, `p95 7484ms`, `7` gateway timeouts, `8218` dropped iterations
+  - `write-rps-2000`: achieved about `411 RPS`, `p95 12873ms`, `75` gateway timeouts, `28149` dropped iterations
+- Tuned write capacity profile (`PGRST_DB_POOL=50`, larger local PostgreSQL settings):
+  - `write-rps-1000`: achieved about `992 RPS`, `p95 42.34ms`, `0` failures
+  - `write-rps-2000`: achieved about `1748 RPS` to `1999 RPS` across repeated runs, with `p95` between `69.5ms` and `337.83ms`, and `0` failures
+
+The biggest confirmed local bottleneck was the default PostgREST pool size of `10` connections.
+The tuned profile removes the observed `504` pool-acquisition failures and raises write throughput by roughly `2x` to `4x`, depending on the target phase.
 
 ## Deployment handoff
 

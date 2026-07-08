@@ -37,13 +37,13 @@ function buildMarkdown(results, missing) {
     lines.push('');
   }
 
-  lines.push('| VPS size | Phase | Target RPS | p95 ms | Failure rate | Achieved RPS | Phase passed | Teardown |');
-  lines.push('|---|---|---:|---:|---:|---:|---|---|');
+  lines.push('| VPS size | Phase | Target RPS | p95 ms | Failure rate | Achieved RPS | Dropped iterations | 409s | 504s | 5xx | Phase passed | Teardown |');
+  lines.push('|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|');
 
   for (const item of results) {
     for (const phase of item.result.phases) {
       lines.push(
-        `| ${item.size} | ${phase.name} | ${phase.targetRps} | ${phase.metrics.p95Ms ?? 'n/a'} | ${phase.metrics.failureRate ?? 'n/a'} | ${phase.metrics.achievedRps ?? 'n/a'} | ${phase.passed ? 'yes' : 'no'} | ${item.teardown.deleted ? 'ok' : 'failed'} |`,
+        `| ${item.size} | ${phase.name} | ${phase.targetRps} | ${phase.metrics.p95Ms ?? 'n/a'} | ${phase.metrics.failureRate ?? 'n/a'} | ${phase.metrics.achievedRps ?? 'n/a'} | ${phase.metrics.droppedIterations ?? 'n/a'} | ${phase.metrics.conflictResponses ?? 'n/a'} | ${phase.metrics.gatewayTimeoutResponses ?? 'n/a'} | ${phase.metrics.serverErrorResponses ?? 'n/a'} | ${phase.passed ? 'yes' : 'no'} | ${item.teardown.deleted ? 'ok' : 'failed'} |`,
       );
     }
   }
@@ -110,4 +110,3 @@ function main() {
 }
 
 main();
-
